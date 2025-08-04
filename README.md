@@ -8,7 +8,7 @@ Newslesle is a browser game in which you are given an image and a hangman-style 
 
 ## Play now!
 
-https://web-production-4557.up.railway.app
+https://newslesle.up.railway.app
 
 ## System Info
 Optimised for Computers, laptops, and tablets. When using a phone, play in landscape for a more playable experience.
