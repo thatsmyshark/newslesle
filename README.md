@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="newslesleghlogo.png" alt="Logo" width="400">
+  <img src="newslesleghlogo.png" alt="Logo" width="500">
 </div>
 
 ## What is newslesle?
