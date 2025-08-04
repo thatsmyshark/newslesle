@@ -1,4 +1,5 @@
 <div align="center">
+  <img src="newslesleghlogo.png" alt="Logo" width="200">
   
   # newslesle
 
