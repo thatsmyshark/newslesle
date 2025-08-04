@@ -1,0 +1,49 @@
+# === PYTHON ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+env/
+venv/
+ENV/
+.venv/
+
+# Jupyter notebooks checkpoint files
+.ipynb_checkpoints/
+
+# Ignore environment variables or secrets
+.env
+
+# Ignore local development files
+*.log
+*.sqlite3
+*.db
+
+# === JAVASCRIPT ===
+# Node dependencies
+node_modules/
+
+# npm or yarn logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build tools (optional if using webpack or other bundlers)
+dist/
+build/
+
+# === GENERAL ===
+# OS-specific
+.DS_Store          # macOS
+Thumbs.db          # Windows
+
+# IDE/editor folders
+.vscode/
+.idea/
+
+# === OPTIONAL ===
+# Ignore compiled/minified files if you're generating them from source
+*.min.js
+*.min.css

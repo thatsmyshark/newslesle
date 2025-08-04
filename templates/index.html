@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>newslesle</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<div class="navbar">
+    <div class="navbar-content">
+        <h1>newslesle</h1>
+        <p class="subtitle">where you work for your news</p>
+    </div>
+</div>
+
+<!-- Game Stats -->
+<div class="game-stats">
+    <span>Time: <strong id="StopwatchDisplay">0.0s</strong></span>
+    <span>Incorrect Guesses Left: <strong id="incorrectGuessesDisplay">2</strong></span>
+    <span>Score: <strong id="ScoreDisplay">0</strong></span>
+</div>  
+
+<!-- History Tab Toggle Button -->
+<div id="historyToggle" class="history-tab-toggle">⟨ History</div>
+
+<!-- History Panel -->
+<div id="historyPanel" class="history-panel">
+    <div class="history-header">
+        <input type="text" id="historySearch" placeholder="Search headlines...">
+        <button id="clearHistoryBtn">Clear History</button>
+    </div>
+    <div id="historyList" class="history-list"></div>
+</div>
+
+<!-- Game Container --> 
+<div class="main-container">
+    <div class="left-side">
+
+        <div id="flipContainer" class="flip-container">
+            <div class="flip-card">
+                <div class="flip-card-front">
+                    <img id="articleImage" src="" alt="" style="width: 100%; height: auto;" />
+                </div>
+                <div class="flip-card-back" id="flipBack">
+                    <div id="flipResultText">Result</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="wordDisplay" class="word-display"></div>
+
+        <div id="aestheticBox" class="headline-display" style="display: none;">
+            <h2 id="aestheticHeadline"></h2>
+            <small id="regionTag" style="display: none; justify-content: left">🔹 </small>
+            <p id="headlineSynopsis" style="display: none;" class="UnderAestheticHeadline">..</p>
+        </div>
+    </div>
+</div>
+
+<!-- Alphabet and Input -->
+<div id="alphabetDisplay" class="alphabet-container" style="user-select: none;"></div>
+
+<!-- Input for letters (not visible, just used for keyboard input) -->
+<input type="text" id="letterInput" maxlength="1" style="opacity: 0; position: absolute; pointer-events: none;">
+
+<!-- Footer -->
+<p style="user-select: none; font-size: small; color:rgb(143, 143, 143); font-style: italic;">Created by thatsmyshark. Open-source code available at github.com/thatsmyshark.</p>
+
+<script src="/static/script.js"></script>
+</body>
+</html>

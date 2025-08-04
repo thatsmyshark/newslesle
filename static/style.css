@@ -1,0 +1,415 @@
+.navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background-color: #2c2f36;
+    color: #e0e0e0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    padding: 0.5em 0;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.navbar-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 100%;
+}
+.navbar h1 {
+    font-size: 2em;
+    margin: 0;
+    color: #e0e0e0;
+}
+.navbar .subtitle {
+    font-style: italic;
+    margin: 0;
+    font-size: 1em;
+    color: #b9b9b9;
+}
+body {
+    margin: 0;
+    padding-top: 5em; /* to make room for fixed navbar */
+    padding-left: 0;
+    padding-right: 0;
+    font-family: 'Segoe UI', sans-serif;
+    background: #2c2f36;
+    color: #e0e0e0;
+    text-align: center;
+}
+
+.word-display {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.4em;
+    max-width: 1000px;
+    max-height: 300px;
+    justify-content: center;
+    align-items: center;
+}
+.word {
+  display: flex;
+  gap: 0.3em;
+  margin-right: 1em;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2em;
+  border-radius: 0.5em;
+  transition: background 0.3s ease;
+}
+.word.complete {
+  background-color: #2c2f36;
+}
+
+
+.letter-box {
+  width: 1.5em;
+  height: 1.5em;
+  background-color: #2c2f36;
+  color: #ddd;
+  border: 1px solid #777;
+  border-radius: 0.2em;
+  font-size: 1.4em;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-transform: uppercase;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.word.complete .letter-box {
+  background-color: #b0f5c8;
+  color: #29623f;
+  border-color: #3c9a64;
+}
+.letter-box.revealed {
+  animation: popIn 0.2s ease;
+  background-color: #eee;
+  color: #111;
+  border: none;
+  box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+
+.modal-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+.modal-content th, .modal-content td {
+  padding: 8px;
+  border-bottom: 1px solid #ccc;
+  text-align: left;
+}
+
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes popIn {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+
+#articleImage { 
+    width: 520px;  /* Limit size */
+    display: none;     /* Initially hidden */
+    /*border-radius: 10px;
+    border: 7px solid #e0e0e0;*/
+    user-select: none;
+    flex-shrink: 0;
+    transition: filter 0.3s ease;
+}
+
+.main-container {
+  display: flex;
+  justify-content: center;   /* center the column horizontally */
+  align-items: center;       /* center inside the column */
+  margin-top: 2em;
+  padding: 0 1em;
+}
+.left-side {
+  display: flex;
+  flex-direction: column;    /* stack vertically */
+  align-items: center;       /* center horizontally */
+  gap: 1.2em;  
+}
+
+/* -aesthetic box- */
+.headline-display {
+    max-width: 500px;
+    width: 100%;
+    flex-grow: 1;
+    background-color: #e0e0e0;
+    color: #333;
+    padding: 1em;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    font-family: 'Segoe UI', sans-serif;
+    z-index: 900;
+    animation: fadeInUp 0.5s ease;
+    color: var(--text-color);
+    text-align: left;
+}
+.headline-display h2 {
+    font-size: 1.6em;
+    color: #333;
+    font-weight: bold;
+    line-height: 1.2;
+    margin: 0 0 0.5em 0;
+    word-wrap: break-word;
+} 
+.headline-display small {
+    color: #333;
+    font-weight: bold;
+    display: block;
+    margin-bottom: 1em;
+}
+.headline-display p {
+    margin-top: 1em;
+    font-size: 1em;
+    line-height: 1.4;
+    color: #333;
+}
+
+#alphabetDisplay.alphabet-container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  gap: 0.4em;
+  padding: 0.5em;
+  z-index: 999;
+  box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
+  overflow-x: auto;
+  overflow-y: hidden;
+  box-sizing: border-box;
+  margin-top: 0.5em;
+  background-color: #1e1e1e;
+  border-top: 1px solid #444;
+}
+
+.alphabet-letter {
+  font-size: 0.8em;
+  width: 1.8em;
+  height: 1.8em;
+  line-height: 1.8em;
+
+  display: inline-block;
+  padding: 0.4em;
+  border-radius: 6px;
+  text-align: center;
+  user-select: none;
+  transition: all 0.2s ease;
+  background-color: #555;
+  color: white;
+  border: 1px solid #777;
+}
+.alphabet-letter.correct { /* this is for the alphabet display */
+    background-color: #29623f;
+    color: #b0f5c8;
+    border-color: #3c9a64;
+}
+.alphabet-letter.incorrect {
+    background-color: #5c2c30;
+    color: #f1c2c2;
+    border-color: #a76666;
+}
+
+
+@keyframes pulse {
+    0% { transform: translateX(-50%) scale(1); }
+    50% { transform: translateX(-50%) scale(1.1); }
+    100% { transform: translateX(-50%) scale(1); }
+}
+@keyframes slideFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.game-stats {
+    display: flex;
+    justify-content: center; /* or space-between or flex-start, based on layout */
+    align-items: center;
+    gap: 1.5rem; /* spacing between the items */
+    flex-wrap: wrap; /* Optional: allows wrapping on smaller screens */
+    margin-bottom: 1rem; /* spacing below */
+    margin-top: 1rem;
+}
+.game-stats > * {
+    white-space: nowrap; /* prevent text wrapping */
+    font-size: 1rem;
+}
+
+.aesthetic-button {
+    padding: 5px 8px;
+    background-color: #eee;
+    color: #333 ;
+    border: 1px solid #333;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 0.8rem;
+    cursor: pointer;
+} /* Next aricle and back article buttons */
+.aesthetic-button:hover {
+    background-color: #2c2f36;
+    color: #eee;
+}
+.endgame-links {
+    margin-top: 20px;
+    display: flex;
+    gap: 1rem;
+    justify-content: right;
+}
+
+
+.flip-container {
+  perspective: 520px;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  margin-bottom: 1rem;
+} /* parent container for the flip card */
+.flip-card {
+  position: relative;
+  left: -7px;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  transform-style: preserve-3d;
+  transition: transform 1s ease;
+  border-radius: 10px;
+  border: 7px solid #e0e0e0;
+}
+.flip-container.flip-success .flip-card {
+  transform: rotateY(180deg);
+}
+.flip-container.flip-fail .flip-card {
+  transform: rotateY(180deg);
+}
+.flip-card-front,
+.flip-card-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  overflow: hidden;
+}
+.flip-card-front img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.flip-card-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+  font-weight: bold;
+  color: white;
+  transform: rotateY(180deg);
+}
+.flip-container.flip-success .flip-card-back {
+  background-color: #28a745; /* Green */
+}
+.flip-container.flip-fail .flip-card-back {
+  background-color: #dc3545; /* Red */
+}
+.flip-container.flip-success,
+.flip-container.flip-fail {
+  margin-bottom: -1rem;
+}
+
+
+.history-tab-toggle {
+    position: fixed;
+    right: 0;
+    top: 50%;
+    background: #eee;
+    color: #2c2f36;
+    padding: 10px 15px;
+    cursor: pointer;
+    transform: translateY(-50%);
+    z-index: 1000;
+    border-radius: 8px 0 0 8px;
+    outline: #2c2f36 solid 1px;
+}
+.history-panel {
+    position: fixed;
+    top: -98;
+    right: -400px;
+    width: 350px;
+    height: 70%;
+    background: #eee;
+    box-shadow: -2px 0 5px rgba(0, 0, 0, 0.3);
+    transition: right 0.3s ease-in-out;
+    padding: 15px;
+    z-index: 999;
+    overflow-y: auto;
+    border-radius: 8px;
+}
+.history-panel.open {
+    right: 0;
+}
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+#historySearch {
+    width: 65%;
+    padding: 5px;
+}
+.history-list .history-item {
+    border-bottom: 1px solid #ccc;
+    color: #2c2f36;
+    padding: 10px 0;
+}
+.history-list .history-item h4 {
+    margin: 0 0 5px;
+    font-size: 16px;
+}
+#clearHistoryBtn {
+    padding: 5px 8px;
+    background-color: #eee;
+    color: #333 ;
+    border: 1px solid #333;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
