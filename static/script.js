@@ -1,3 +1,4 @@
+let gameActive = false;
 let headline = "";
 let articleURL = "";
 let wrongGuesses = 0;
@@ -12,37 +13,109 @@ let articleDescription = "";
 let score = 0;
 let guessedCorrectLetters = new Set();
 let guessedIncorrectLetters = new Set();
+const MAX_DAILY_HEADLINES = 10;
+const DATE_KEY = "headlineDate";
+const COUNT_KEY = "headlineCount";
 
 function keyboardListener(e) {
+    if (e.metaKey || e.ctrlKey) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const key = e.key.toUpperCase();
     if (/^[A-Z]$/.test(key)) {
         handleLetterGuess(key);
     }
 }
-document.addEventListener("keydown", keyboardListener);
 
-fetch("/headline")
-    .then(res => res.json())
-    .then(data => {
-        const completed = new Set(JSON.parse(localStorage.getItem("completedHeadlines")) || []);
-        // Loop to retry fetch if headline is already completed
-        function isCompleted(headline) {
-            return completed.has(headline);
-        }
+// Only check limit before any fetch
+if (checkLimit()) {
+    getValidHeadline(); // Triggers the looped fetch with retry cap
+} else {
+    showLimitPopup(); // Rate limit hit — don’t fetch headline
+}
 
-        function tryFetch(data) {
-            if (isCompleted(data.headline)) {
-                return fetch("/headline").then(res => res.json()).then(tryFetch);
+function getValidHeadline(attempts = 0) {
+    if (attempts >= 5) {
+        alert("No new headlines available.");
+        return;
+    }
+
+    fetch("/headline")
+        .then(res => res.json())
+        .then(data => {
+            const completed = new Set(JSON.parse(localStorage.getItem("completedHeadlines")) || []);
+            if (completed.has(data.headline)) {
+                // Retry
+                getValidHeadline(attempts + 1);
             } else {
-                setupGame(data);
+                setupGame(data);            // Start the game
             }
-        }
+        })
+        .catch(err => {
+            console.error("Failed to fetch headline:", err);
+        });
+}
+function startGame() {
+    gameActive = true;
+    document.addEventListener("keydown", keyboardListener);
+}
 
-        tryFetch(data);
-    });
+function incrementDailyCount() {
+    const today = new Date().toISOString().split("T")[0];
+    const savedDate = localStorage.getItem(DATE_KEY);
+    let count = parseInt(localStorage.getItem(COUNT_KEY) || "0");
+
+    if (savedDate !== today) {
+        localStorage.setItem(DATE_KEY, today);
+        localStorage.setItem(COUNT_KEY, "1");
+    } else {
+        localStorage.setItem(COUNT_KEY, (count + 1).toString());
+    }
+}   
+function checkLimit() {
+    const today = new Date().toISOString().split("T")[0];
+    const savedDate = localStorage.getItem(DATE_KEY);
+    let count = parseInt(localStorage.getItem(COUNT_KEY) || "0");
+
+    if (savedDate !== today) {
+        localStorage.setItem(DATE_KEY, today);
+        localStorage.setItem(COUNT_KEY, "1");
+        return true;
+    }
+
+    if (count < MAX_DAILY_HEADLINES) {
+        localStorage.setItem(COUNT_KEY, (count + 1).toString());
+        return true;
+    }
+
+    return false;
+}
+function showLimitPopup() {
+    const limitDiv = document.getElementById("limitMessage");
+    if (limitDiv) {
+        limitDiv.innerHTML = `All done! Come back tomorrow for more headlines to solve!`;
+        limitDiv.style.display = "block";
+    }
+
+    // Still load the image
+    fetch("/headline")
+        .then(res => res.json())
+        .then(data => {
+            articleImage = data.urlToImage;
+            const articleImageElement = document.getElementById("articleImage");
+            if (articleImage && articleImageElement) {
+                articleImageElement.src = articleImage;
+                articleImageElement.style.display = "block";
+            }
+        });
+}
+window.resetDailyLimitDebug = function() {
+    localStorage.removeItem("headlineCount");
+    localStorage.removeItem("headlineDate");
+    console.log("Daily play count reset.");
+};  
 
 function setupGame(data) {
+    startGame();
     headline = data.headline;
     splitHeadline = headline.split(" ");
     wordGuesses = splitHeadline.map(() => new Set());
@@ -120,7 +193,6 @@ function updateDisplay() {
     renderAlphabet();
 
 }
-
 function renderAlphabet() {
     const container = document.getElementById("alphabetDisplay");
     container.innerHTML = "";
@@ -248,6 +320,7 @@ function endGame(message) {
     const flipContainer = document.getElementById("flipContainer");
     const flipResultText = document.getElementById("flipResultText");
 
+    gameActive = false;
     document.removeEventListener("keydown", keyboardListener);
     document.getElementById("wordDisplay").style.display = "none";
 
@@ -285,6 +358,7 @@ function endGame(message) {
     // flipContainer.classList.remove("flip-success", "flip-fail");
 
     if (wordCompleted.every(Boolean)) {
+    incrementDailyCount();
     saveToHistory(headline, score, (Date.now() - startTime) / 1000);
     }
 

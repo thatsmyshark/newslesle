@@ -6,12 +6,10 @@
     <link rel="stylesheet" href="/static/style.css">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body>
 
 <div class="navbar">
     <div class="navbar-content">
-        <h1>newslesle</h1>
-        <p class="subtitle">where you work for your news</p>
+        <img src="/static/logo.png" alt="newslesle logo" style="height: 60px;">
     </div>
 </div>
 
@@ -49,6 +47,9 @@
             </div>
         </div>
 
+        <div id="limitMessage" style="display: none; margin-top: -1rem; padding: 1rem; background-color: #222; color: white; text-align: center; border-radius: 10px; font-size: 1.25rem; max-width: 500px;">
+        </div>
+
         <div id="wordDisplay" class="word-display"></div>
 
         <div id="aestheticBox" class="headline-display" style="display: none;">
@@ -66,7 +67,10 @@
 <input type="text" id="letterInput" maxlength="1" style="opacity: 0; position: absolute; pointer-events: none;">
 
 <!-- Footer -->
-<p style="user-select: none; font-size: small; color:rgb(143, 143, 143); font-style: italic;">Created by thatsmyshark. Open-source code available at github.com/thatsmyshark.</p>
+<p style="user-select: none; font-size: small; color:rgb(143, 143, 143); font-style: italic;">
+    Headlines featured may not always reflect accurate or complete information.
+    The responsibility to fact-check and verify information falls on the user.<br>
+    Created by github.com/thatsmyshark. Powered by Railway.</p>
 
 <script src="/static/script.js"></script>
 </body>
