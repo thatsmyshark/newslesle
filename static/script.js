@@ -219,7 +219,7 @@ function renderAlphabet() {
 function updateIncorrectGuessesDisplay() {
     const remaining = maxWrong - wrongGuesses;
     document.getElementById("incorrectGuessesDisplay").textContent = `${remaining}`;
-} //is this working?
+}
 function handleLetterGuess(letter) {
     if (!/^[A-Z]$/.test(letter)) return;
     if (!startTime) startStopwatch();
@@ -266,25 +266,23 @@ function handleLetterGuess(letter) {
     renderAlphabet();
 }
 
-function startStopwatch() {
+function startStopwatch() { // Start the stopwatch when the first letter is guessed
     startTime = Date.now();
     timerInterval = setInterval(updateStopwatch, 100);
 }
-function updateStopwatch() {
+function updateStopwatch() { // Update the stopwatch display every 100ms
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     document.getElementById("StopwatchDisplay").textContent = ` ${elapsed}s`;
 }
-function stopStopwatch() {
+function stopStopwatch() { // Stop the stopwatch without resetting
     clearInterval(timerInterval);
     timerInterval = null;
     // Do NOT reset startTime or change the text content.
 }
-
-function updateScoreDisplay() {
+function updateScoreDisplay() { // Update the score display based on the time taken
     document.getElementById("ScoreDisplay").textContent = ` ${score.toFixed(1)}`;
 }
-
-function saveToHistory(headline, score, timeTaken) {
+function saveToHistory(headline, score, timeTaken) { // Save the game result to history
     const history = JSON.parse(localStorage.getItem("newslesleHistory")) || [];
     history.push({ headline, score, timeTaken });
     localStorage.setItem("newslesleHistory", JSON.stringify(history));
@@ -296,7 +294,7 @@ function saveToHistory(headline, score, timeTaken) {
 
     renderHistoryList(); // Refresh list
 }
-function renderHistoryList(filter = "") {
+function renderHistoryList(filter = "") { // Render the history list with optional filtering
     const history = JSON.parse(localStorage.getItem("newslesleHistory")) || [];
     const container = document.getElementById("historyList");
     container.innerHTML = "";
@@ -314,7 +312,7 @@ function renderHistoryList(filter = "") {
         });
 }
 
-function endGame(message) {
+function endGame(message) { // End the game and display the result
     stopStopwatch();
     const timeTaken = (Date.now() - startTime) / 1000;
     const playerLost = wrongGuesses >= maxWrong;
@@ -380,12 +378,15 @@ function endGame(message) {
             flipContainer.style.setProperty("margin-bottom", "-1rem", "important");
         }, 3000);
 
+    
     updateScoreDisplay();
-}
+} 
 
+// History Panel Toggle and Search Functionality
 const historyToggle = document.getElementById("historyToggle");
 const historyPanel = document.getElementById("historyPanel");
-    historyToggle.addEventListener("click", (event) => {
+
+historyToggle.addEventListener("click", (event) => {
             historyPanel.classList.add("open");
             historyToggle.style.display = "none";
 
@@ -393,7 +394,7 @@ const historyPanel = document.getElementById("historyPanel");
             setTimeout(() => {
                 document.addEventListener("click", handleOutsideClick);
             }, 0);
-        }); 
+}); 
 function handleOutsideClick(event) {
     // If the click is outside the historyPanel, close it and show toggle again
     if (!historyPanel.contains(event.target)) {
