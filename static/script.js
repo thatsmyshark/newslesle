@@ -83,7 +83,6 @@ function checkLimit() {
     }
 
     if (count < MAX_DAILY_HEADLINES) {
-        localStorage.setItem(COUNT_KEY, (count + 1).toString());
         return true;
     }
 
@@ -113,6 +112,10 @@ window.resetDailyLimitDebug = function() {
     localStorage.removeItem("headlineDate");
     console.log("Daily play count reset.");
 };  
+window.CheckCountDebug = function() {
+    const count = parseInt(localStorage.getItem("headlineCount") || "0");
+    console.log("Sending count to server:", count);
+}
 
 function setupGame(data) {
     startGame();
