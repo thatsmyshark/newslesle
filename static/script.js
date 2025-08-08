@@ -13,7 +13,7 @@ let articleDescription = "";
 let score = 0;
 let guessedCorrectLetters = new Set();
 let guessedIncorrectLetters = new Set();
-const MAX_DAILY_HEADLINES = 5;
+const MAX_DAILY_HEADLINES = 6;
 const DATE_KEY = "headlineDate";
 const COUNT_KEY = "headlineCount";
 
@@ -72,7 +72,7 @@ function incrementDailyCount() {
     }
 }   
 function checkLimit() {
-    const today = new Date().toISOString().split("T")[0];
+    const today = new Date().toLocaleDateString('en-CA');
     const savedDate = localStorage.getItem(DATE_KEY);
     let count = parseInt(localStorage.getItem(COUNT_KEY) || "0");
 
@@ -115,6 +115,10 @@ window.resetDailyLimitDebug = function() {
 window.CheckCountDebug = function() {
     const count = parseInt(localStorage.getItem("headlineCount") || "0");
     console.log("Sending count to server:", count);
+}
+window.CheckCurrentDate = function() {
+    const today = new Date().toLocaleDateString('en-CA');
+    console.log("Current date:", today);
 }
 
 function setupGame(data) {
