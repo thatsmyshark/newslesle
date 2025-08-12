@@ -15,7 +15,6 @@
     text-align: center;
     box-sizing: border-box;
 }
-
 .navbar-content {
     display: flex;
     flex-direction: column;
@@ -103,18 +102,7 @@ body {
 }
 
 
-.modal-content table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 1rem;
-}
-.modal-content th, .modal-content td {
-  padding: 8px;
-  border-bottom: 1px solid #ccc;
-  text-align: left;
-}
-
-
+/* transition for aesthetic boxes */
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -147,6 +135,7 @@ body {
     transition: filter 0.3s ease;
 }
 
+
 .main-container {
   display: flex;
   justify-content: center;   /* center the column horizontally */
@@ -160,6 +149,7 @@ body {
   align-items: center;       /* center horizontally */
   gap: 1.2em;  
 }
+
 
 /* -aesthetic box- */
 .headline-display {
@@ -198,6 +188,8 @@ body {
     color: #333;
 }
 
+
+/* clickable alphabet display container */
 #alphabetDisplay.alphabet-container {
   position: fixed;
   bottom: 0;
@@ -223,8 +215,6 @@ body {
     justify-content: left;
   }
 }
-
-
 .alphabet-letter {
   font-size: 0.8em;
   width: 1.8em;
@@ -241,7 +231,7 @@ body {
   color: white;
   border: 1px solid #777;
 }
-.alphabet-letter.correct { /* this is for the alphabet display */
+.alphabet-letter.correct { /* this is for the clickable alphabet display */
     background-color: #29623f;
     color: #b0f5c8;
     border-color: #3c9a64;
@@ -253,22 +243,7 @@ body {
 }
 
 
-@keyframes pulse {
-    0% { transform: translateX(-50%) scale(1); }
-    50% { transform: translateX(-50%) scale(1.1); }
-    100% { transform: translateX(-50%) scale(1); }
-}
-@keyframes slideFadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
+/* score, stopwatch, and mistakes display */
 .game-stats {
     display: flex;
     justify-content: center; /* or space-between or flex-start, based on layout */
@@ -277,11 +252,10 @@ body {
     flex-wrap: wrap; /* Optional: allows wrapping on smaller screens */
     margin-bottom: 1rem; /* spacing below */
     margin-top: 1rem;
-}
-.game-stats > * {
     white-space: nowrap; /* prevent text wrapping */
     font-size: 1rem;
 }
+
 
 .aesthetic-button {
     padding: 5px 8px;
@@ -361,7 +335,7 @@ body {
   margin-bottom: -1rem;
 }
 
-
+/* day tab in calendar */
 .history-tab-toggle {
     position: fixed;
     right: 0;
@@ -378,9 +352,9 @@ body {
 .history-panel {
     position: fixed;
     top: -98;
-    right: -400px;
+    right: -400px; 
     width: 350px;
-    height: 70%;
+    height: 50%;
     background: #eee;
     box-shadow: -2px 0 5px rgba(0, 0, 0, 0.3);
     transition: right 0.3s ease-in-out;
@@ -401,6 +375,7 @@ body {
 #historySearch {
     width: 65%;
     padding: 5px;
+    border-radius: 6px;
 }
 .history-list .history-item {
     border-bottom: 1px solid #ccc;
@@ -422,3 +397,109 @@ body {
     cursor: pointer;
 }
 
+
+/* Calendar basic layout */
+.calendar-nav {
+    display: flex;
+    align-items: center;   /* vertical centering */
+    justify-content: center; /* keep them grouped in the center */
+    gap: 0.5rem;           /* spacing between elements */
+    padding:8px 10px;
+    border-bottom:1px solid rgba(255,255,255,0.04);
+}
+.calendar-nav .month-title { 
+  font-weight:600; 
+  font-size: 0.9em;
+  background-color: #f9f9f9;
+  border: 1px solid #ccc;       /* light border */
+  padding: 0.1em 0.5em;           /* padding for spacing */
+  border-radius: 8px;
+  color: #333;                  /* text color */
+  font-weight: normal;            /* normal weight */
+}
+.prev, .next {
+  font-weight:600; 
+  font-size: 0.9em;
+  background-color: #f9f9f9;
+  border: 1px solid #ccc;       /* light border */
+  padding: 0.1em 0.5em;           /* padding for spacing */
+  border-radius: 8px;
+  color: #333;                  /* text color */
+  font-weight: normal;            /* normal weight */
+    /* previous button styles */
+}
+.calendar-container {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+    padding: 10px;
+    align-items: start;
+}
+.calendar-weekday {
+    font-size: 12px;
+    text-align: center;
+    font-weight: 600;
+    opacity: 0.9;
+    color: #333;
+}
+.calendar-day {
+    padding: 8px;
+    text-align: center;
+    border-radius: 6px;
+    background: #333;
+    color: #fff;
+    user-select: none;
+}
+.calendar-day.greyed {
+    background: #333;
+    color: #7d7d7d;
+    cursor: default;
+    opacity: 0.7;
+}
+.calendar-day.clickable {
+    cursor: pointer;
+    transition: transform .06s;
+}
+.calendar-day.clickable:hover { transform: translateY(-2px); }
+.completed {
+    background-color: #4CAF50; /* or any highlight color */
+    cursor: pointer;
+}
+.history-back {
+    display: flex;
+    align-items: center;   /* vertical centering */
+    justify-content: center; /* keep them grouped in the center */
+    gap: 0.5rem;           /* spacing between elements */
+    padding:8px 10px;
+    margin: 0px 0px;
+    border-bottom:1px solid rgba(255,255,255,0.04);
+    
+}
+.history-date-heading {
+  font-size: 0.9em;
+  background-color: #f9f9f9;
+  border: 1px solid #ccc;       /* light border */
+  padding: 0.1em 0.5em;           /* padding for spacing */
+  border-radius: 8px;
+  color: #333;                  /* text color */
+  font-weight: normal;            /* normal weight */
+}
+.back-button {
+    padding: 0 6px;
+    height: 24px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;   /* vertical center */
+    justify-content: center; /* horizontal center */
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background-color: white;
+    cursor: pointer;
+}
+.back-button:hover {
+    background-color: #eee;
+}
+.empty-history {
+  color: #333;
+  font-size: 1rem;
+}

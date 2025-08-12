@@ -11,6 +11,7 @@ let wordCompleted = [];
 let articleImage = null;
 let articleDescription = "";
 let score = 0;
+let completedHeadlines = new Set();
 let guessedCorrectLetters = new Set();
 let guessedIncorrectLetters = new Set();
 const MAX_DAILY_HEADLINES = 6;
@@ -60,7 +61,7 @@ function startGame() {
 }
 
 function incrementDailyCount() {
-    const today = new Date().toISOString().split("T")[0];
+    const today = new Date().toLocaleDateString('en-CA');
     const savedDate = localStorage.getItem(DATE_KEY);
     let count = parseInt(localStorage.getItem(COUNT_KEY) || "0");
 
@@ -120,6 +121,7 @@ window.CheckCurrentDate = function() {
     const today = new Date().toLocaleDateString('en-CA');
     console.log("Current date:", today);
 }
+
 
 function setupGame(data) {
     startGame();
@@ -286,35 +288,317 @@ function stopStopwatch() { // Stop the stopwatch without resetting
 function updateScoreDisplay() { // Update the score display based on the time taken
     document.getElementById("ScoreDisplay").textContent = ` ${score.toFixed(1)}`;
 }
-function saveToHistory(headline, score, timeTaken) { // Save the game result to history
+/* ---------------------------
+   Calendar rendering + helpers
+   --------------------------- */
+
+function renderCalendar(year, month) {
+    const panel = document.getElementById("historyPanel");
+    const container = document.getElementById("calendarContainer");
+    const results = document.getElementById("historyResults");
+
+    // hide results, show container
+    results.style.display = "none";
+    container.style.display = "grid";
+    container.innerHTML = "";
+
+    // remove old nav if present (prevents duplicates)
+    const oldNav = panel.querySelector(".calendar-nav");
+    if (oldNav) oldNav.remove();
+
+    // build month nav and insert before the calendar container
+    const nav = document.createElement("div");
+    nav.className = "calendar-nav";
+    nav.innerHTML = `
+        <button class="prev" aria-label="Previous month">‹</button>
+        <div class="month-title">${year}-${String(month + 1).padStart(2,"0")}</div>
+        <button class="next" aria-label="Next month">›</button>
+    `;
+    panel.insertBefore(nav, container);
+
+    nav.querySelector(".prev").addEventListener("click", () => {
+        let newMonth = month - 1;
+        let newYear = year;
+        if (newMonth < 0) { newMonth = 11; newYear = year - 1; }
+        renderCalendar(newYear, newMonth);
+    });
+    nav.querySelector(".next").addEventListener("click", () => {
+        let newMonth = month + 1;
+        let newYear = year;
+        if (newMonth > 11) { newMonth = 0; newYear = year + 1; }
+        renderCalendar(newYear, newMonth);
+    });
+
+    // load history and build lookup map by date (YYYY-MM-DD)
     const history = JSON.parse(localStorage.getItem("newslesleHistory")) || [];
-    history.push({ headline, score, timeTaken });
+    const historyMap = {};
+    history.forEach(entry => {
+        if (!entry.date) return;
+        historyMap[entry.date] = historyMap[entry.date] || [];
+        historyMap[entry.date].push(entry);
+    });
+
+    // firstPlay (use stored firstPlayDate if available)
+    const firstPlayRaw = localStorage.getItem("firstPlayDate") || new Date().toISOString().split("T")[0];
+    const firstPlay = new Date(firstPlayRaw + "T00:00:00");
+    // today at midnight (local)
+    const todayRaw = new Date().toISOString().split("T")[0];
+    const today = new Date(todayRaw + "T00:00:00");
+
+    // weekday header (Sun..Sat)
+    const weekdays = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    weekdays.forEach(w => {
+        const wEl = document.createElement("div");
+        wEl.className = "calendar-weekday";
+        wEl.textContent = w;
+        container.appendChild(wEl);
+    });
+
+    // days calculation
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    // blank placeholders before the 1st
+    for (let i = 0; i < firstDayIndex; i++) {
+        const blank = document.createElement("div");
+        blank.className = "calendar-empty";
+        container.appendChild(blank);
+    }
+
+    // create day cells
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateObj = new Date(year, month, day, 0, 0, 0);
+        const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const dayEl = document.createElement("div");
+        dayEl.className = "calendar-day";
+        dayEl.textContent = day;
+        dayEl.setAttribute("data-date", dateStr);
+        dayEl.title = dateStr;
+
+        const beforeFirstPlay = dateObj < firstPlay;
+        const afterToday = dateObj > today;
+        const hasPlays = !!historyMap[dateStr];
+
+        // completed headline = has plays
+        if (hasPlays) {
+            dayEl.classList.add("completed");
+            dayEl.addEventListener("click", () => {
+                renderDayEntries(dateStr, year, month);
+            });
+        }
+        // greyed out only if before first play OR after today OR no plays and before current day
+        else if (beforeFirstPlay || afterToday) {
+            dayEl.classList.add("greyed");
+        }
+        // available but unplayed
+        else {
+            dayEl.classList.add("clickable");
+            dayEl.addEventListener("click", () => {
+                renderDayEntries(dateStr, year, month);
+            });
+        }
+
+        container.appendChild(dayEl);
+    }
+}
+
+function renderDayEntries(dateString, year = null, month = null) {
+    const container = document.getElementById("calendarContainer");
+    const results = document.getElementById("historyResults");
+    const history = JSON.parse(localStorage.getItem("newslesleHistory")) || [];
+
+    // show results, hide calendar
+    container.style.display = "none";
+    results.style.display = "block";
+
+    // remove month nav if present
+    const nav = document.querySelector(".calendar-nav");
+    if (nav) nav.remove();
+
+    // try to reuse existing elements from HTML (non-destructive)
+    let backRow = results.querySelector(".history-back");
+    let backBtn = results.querySelector("#backBtn");
+    let heading = results.querySelector("#dateHeading");
+    let dayResults = results.querySelector("#dayResults");
+
+    // create missing pieces
+    if (!backRow) {
+        backRow = document.createElement("div");
+        backRow.className = "history-back";
+    }
+    if (!backBtn) {
+        backBtn = document.createElement("button");
+        backBtn.id = "backBtn";
+        backBtn.textContent = "←";
+    }
+    if (!heading) {
+        heading = document.createElement("h3");
+        heading.className = "history-day-date-heading";
+        heading.id = "dateHeading";
+    }
+    if (!dayResults) {
+        dayResults = document.createElement("div");
+        dayResults.id = "dayResults";
+    }
+
+    // If results container does not already contain #dayResults, reset results and append
+    if (!results.querySelector("#dayResults")) {
+        results.innerHTML = "";
+        results.appendChild(backRow);
+        results.appendChild(dayResults);
+    } else {
+        // ensure backRow exists and sits before dayResults
+        if (!results.contains(backRow)) {
+            results.insertBefore(backRow, dayResults);
+        }
+    }
+
+    // ensure backRow contains the button and heading in the right order
+    if (!backRow.contains(backBtn)) backRow.appendChild(backBtn);
+    if (!backRow.contains(heading)) backRow.appendChild(heading);
+
+    // clear only the dayResults area
+    dayResults.innerHTML = "";
+
+    // set up back button (assign to avoid adding duplicate listeners)
+    backBtn.onclick = () => {
+        const now = new Date();
+        renderCalendar(year ?? now.getFullYear(), month ?? now.getMonth());
+    };
+
+    // set heading
+    heading.textContent = dateString;
+
+    // populate entries for the day
+    const entries = history.filter(h => h.date === dateString);
+    if (entries.length === 0) {
+        const empty = document.createElement("div");
+        empty.classList.add("empty-history");
+        empty.textContent = "No entries for this day.";
+        dayResults.appendChild(empty);
+        return;
+    }
+
+    entries.forEach(entry => {
+        const div = document.createElement("div");
+        div.classList.add("history-item");
+        div.innerHTML = `
+            <h4>${titleCase(entry.headline)}</h4>
+            <div>Score: ${entry.score}</div>
+            <div>Time: ${parseFloat(entry.timeTaken).toFixed(1)}s</div>
+        `;
+        dayResults.appendChild(div);
+    });
+}
+
+function renderSearchResults(filter) {
+    const container = document.getElementById("calendarContainer");
+    const results = document.getElementById("historyResults");
+    const history = JSON.parse(localStorage.getItem("newslesleHistory")) || [];
+
+    container.style.display = "none";
+    results.style.display = "block";
+
+    // remove month nav if present
+    const nav = document.querySelector(".calendar-nav");
+    if (nav) nav.remove();
+
+    // reuse/ensure header + dayResults exist (same logic as renderDayEntries)
+    let backRow = results.querySelector(".history-back");
+    let backBtn = results.querySelector("#backBtn");
+    let heading = results.querySelector("#dateHeading");
+    let dayResults = results.querySelector("#dayResults");
+
+    if (!backRow) {
+        backRow = document.createElement("div");
+        backRow.className = "history-back";
+    }
+    if (!backBtn) {
+        backBtn = document.createElement("button");
+        backBtn.id = "backBtn";
+        backBtn.textContent = "← Back to month";
+    }
+    if (!heading) {
+        heading = document.createElement("h3");
+        heading.className = "history-day-date-heading";
+        heading.id = "dateHeading";
+    }
+    if (!dayResults) {
+        dayResults = document.createElement("div");
+        dayResults.id = "dayResults";
+    }
+
+    if (!results.querySelector("#dayResults")) {
+        results.innerHTML = "";
+        results.appendChild(backRow);
+        results.appendChild(dayResults);
+    } else {
+        if (!results.contains(backRow)) results.insertBefore(backRow, dayResults);
+    }
+
+    if (!backRow.contains(backBtn)) backRow.appendChild(backBtn);
+    if (!backRow.contains(heading)) backRow.appendChild(heading);
+
+    backBtn.onclick = () => {
+        const now = new Date();
+        renderCalendar(now.getFullYear(), now.getMonth());
+        const search = document.getElementById("historySearch");
+        if (search) search.value = "";
+    };
+
+    heading.textContent = `Search results: "${filter}"`;
+
+    dayResults.innerHTML = "";
+
+    const matches = history.filter(entry => entry.headline.toLowerCase().includes(filter.toLowerCase()));
+    if (matches.length === 0) {
+        const none = document.createElement("div");
+        none.textContent = `No history items match "${filter}".`;
+        dayResults.appendChild(none);
+        return;
+    }
+
+    matches.forEach(entry => {
+        const div = document.createElement("div");
+        div.classList.add("history-item");
+        div.innerHTML = `
+            <h4>${titleCase(entry.headline)}</h4>
+            <div>Date: ${entry.date}</div>
+            <div>Score: ${entry.score}</div>
+            <div>Time: ${parseFloat(entry.timeTaken).toFixed(1)}s</div>
+        `;
+        dayResults.appendChild(div);
+    });
+}
+
+function saveToHistory(headline, score, timeTaken) {
+    const history = JSON.parse(localStorage.getItem("newslesleHistory")) || [];
+    const todayDate = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+
+    // Save firstPlayDate if not already set
+    if (!localStorage.getItem("firstPlayDate")) {
+        localStorage.setItem("firstPlayDate", todayDate);
+    }
+
+    // Add the new entry with the date
+    history.push({ 
+        headline, 
+        score, 
+        timeTaken, 
+        date: todayDate // << Calendar key
+    });
+
     localStorage.setItem("newslesleHistory", JSON.stringify(history));
 
-    // Save completed headlines for exclusion
+    // Save completed headlines for exclusion in getValidHeadline()
     const completed = new Set(JSON.parse(localStorage.getItem("completedHeadlines")) || []);
     completed.add(headline);
     localStorage.setItem("completedHeadlines", JSON.stringify([...completed]));
 
-    renderHistoryList(); // Refresh list
+    // No more direct list rendering — calendar handles it now
 }
-function renderHistoryList(filter = "") { // Render the history list with optional filtering
-    const history = JSON.parse(localStorage.getItem("newslesleHistory")) || [];
-    const container = document.getElementById("historyList");
-    container.innerHTML = "";
 
-    history.filter(entry => entry.headline.toLowerCase().includes(filter.toLowerCase()))
-        .forEach(entry => {
-            const div = document.createElement("div");
-            div.classList.add("history-item");
-            div.innerHTML = `
-                <h4>${titleCase(entry.headline)}</h4>
-                <div>Score: ${entry.score}</div>
-                <div>Time: ${entry.timeTaken.toFixed(1)}s</div>
-            `;
-            container.appendChild(div);
-        });
-}
+
 
 function endGame(message) { // End the game and display the result
     stopStopwatch();
@@ -364,6 +648,7 @@ function endGame(message) { // End the game and display the result
 
     if (wordCompleted.every(Boolean)) {
     incrementDailyCount();
+    completedHeadlines.add(currentDateString); // e.g., "2025-08-11"
     saveToHistory(headline, score, (Date.now() - startTime) / 1000);
     }
 
@@ -391,14 +676,19 @@ const historyToggle = document.getElementById("historyToggle");
 const historyPanel = document.getElementById("historyPanel");
 
 historyToggle.addEventListener("click", (event) => {
-            historyPanel.classList.add("open");
-            historyToggle.style.display = "none";
+    historyPanel.classList.add("open");
+    historyToggle.style.display = "none";
 
-            // Delay adding the listener to avoid immediate trigger from this click
-            setTimeout(() => {
-                document.addEventListener("click", handleOutsideClick);
-            }, 0);
-}); 
+    // Render the current month when the panel opens
+    const now = new Date();
+    renderCalendar(now.getFullYear(), now.getMonth());
+
+    // Delay adding the outside-click listener to avoid immediate close
+    setTimeout(() => {
+        document.addEventListener("click", handleOutsideClick);
+    }, 0);
+});
+
 function handleOutsideClick(event) {
     // If the click is outside the historyPanel, close it and show toggle again
     if (!historyPanel.contains(event.target)) {
@@ -408,13 +698,18 @@ function handleOutsideClick(event) {
     }
 }
 document.getElementById("historySearch").addEventListener("input", (e) => {
-    renderHistoryList(e.target.value);
+    if (e.target.value.trim() === "") {
+        const now = new Date();
+        renderCalendar(now.getFullYear(), now.getMonth());
+    } else {
+        renderSearchResults(e.target.value);
+    }
 });
 document.getElementById("clearHistoryBtn").addEventListener("click", () => {
     if (confirm("Clear all saved history?")) {
         localStorage.removeItem("newslesleHistory");
         localStorage.removeItem("completedHeadlines");
-        renderHistoryList();
+        const now = new Date();
+        renderCalendar(new Date().getFullYear(), new Date().getMonth());
     }
 });
-renderHistoryList();
