@@ -10,6 +10,7 @@ let wordGuesses = [];
 let wordCompleted = [];
 let articleImage = null;
 let articleDescription = "";
+let articlePublicationDate = "";
 let score = 0;
 let completedHeadlines = new Set();
 let guessedCorrectLetters = new Set();
@@ -108,6 +109,14 @@ function showLimitPopup() {
             }
         });
 }
+function formatDateSimple(isoString) {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0"); // JS months are 0-based
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
 window.resetDailyLimitDebug = function() {
     localStorage.removeItem("headlineCount");
     localStorage.removeItem("headlineDate");
@@ -132,8 +141,11 @@ function setupGame(data) {
     articleURL = data.url;
     articleImage = data.urlToImage;
     articleDescription = data.description;
+    articlePublicationDate = data.publishedAt; // ISO string like "2025-08-15T12:34:56Z"
 
-    document.getElementById("regionTag").innerHTML = `Retrieved from: <em>${data.sourceName || "News Outlet Name"}</em>`;
+    document.getElementById("regionTag").innerHTML = 
+    `Retrieved from: <strong>${data.sourceName || "News Outlet Name"}</strong> (Published on: <strong>${formatDateSimple(articlePublicationDate)}</strong>)`;
+
     updateIncorrectGuessesDisplay();
     updateDisplay();
     renderAlphabet();
@@ -603,6 +615,7 @@ function saveToHistory(headline, score, timeTaken) {
 function endGame(message) { // End the game and display the result
     stopStopwatch();
     const timeTaken = (Date.now() - startTime) / 1000;
+    const currentDateString = new Date().toLocaleDateString('en-CA');
     const playerLost = wrongGuesses >= maxWrong;
     score = playerLost ? 0 : parseFloat((1000 / timeTaken).toFixed(1));
     const articleImageElement = document.getElementById("articleImage");
@@ -619,15 +632,18 @@ function endGame(message) { // End the game and display the result
     const aestheticHeadline = document.getElementById("aestheticHeadline");
     const synopsisEl = document.getElementById("headlineSynopsis");
     const regionTag = document.getElementById("regionTag");
+    const publicationDateEl = document.getElementById("publicationDate");
 
     aestheticHeadline.textContent = titleCase(headline);
     synopsisEl.textContent = articleDescription;
     regionTag.style.display = "block";
     synopsisEl.style.display = "block";
+    publicationDateEl.style.display = "block";
 
     aestheticBox.classList.add("fade-in");
     regionTag.classList.add("fade-in");
     synopsisEl.classList.add("fade-in");
+    publicationDateEl.classList.add("fade-in");
 
     const actionLinks = document.createElement("div");
     actionLinks.classList.add("endgame-links");
@@ -646,12 +662,6 @@ function endGame(message) { // End the game and display the result
     // Remove any existing flip state
     // flipContainer.classList.remove("flip-success", "flip-fail");
 
-    if (wordCompleted.every(Boolean)) {
-    incrementDailyCount();
-    completedHeadlines.add(currentDateString); // e.g., "2025-08-11"
-    saveToHistory(headline, score, (Date.now() - startTime) / 1000);
-    }
-
     // Trigger flip with appropriate result
     if (playerLost) {
         flipResultText.textContent = "Fail";
@@ -659,6 +669,9 @@ function endGame(message) { // End the game and display the result
     } else if (wordCompleted.every(Boolean)) {
         flipResultText.textContent = "Success";
         flipContainer.classList.add("flip-success");
+        incrementDailyCount();
+        completedHeadlines.add(currentDateString); // e.g., "2025-08-11"
+        saveToHistory(headline, score, (Date.now() - startTime) / 1000);
     }
 
     //Flip back to article image after 5 seconds
