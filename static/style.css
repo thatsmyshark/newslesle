@@ -43,6 +43,7 @@ body {
     text-align: center;
 }
 
+
 .word-display {
     display: flex;
     flex-direction: row;
@@ -351,17 +352,20 @@ body {
 }
 .history-panel {
     position: fixed;
-    top: -98;
-    right: -400px; 
+    top: -105;                 /* pin to top of viewport */
+    right: -400px;          /* keep offscreen until open */
     width: 350px;
-    height: 50%;
+    max-height: 100vh;      /* don’t overflow past the viewport */
     background: #eee;
     box-shadow: -2px 0 5px rgba(0, 0, 0, 0.3);
     transition: right 0.3s ease-in-out;
     padding: 15px;
     z-index: 999;
-    overflow-y: auto;
+    overflow-y: auto;       /* allow scrolling if content taller than viewport */
     border-radius: 8px;
+
+    /* remove the fixed height */
+    height: auto;
 }
 .history-panel.open {
     right: 0;
@@ -503,3 +507,195 @@ body {
   color: #333;
   font-size: 1rem;
 }
+.streak-display {
+    font-size: 2rem;
+    font-weight: bold;
+    text-align: center;
+    margin-top: 1.5rem;
+    position: relative;
+    animation: streakFadeIn 0.6s ease-out forwards;
+}
+
+.triangle-zip-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 1rem;
+}
+
+.triangle-row {
+    display: flex;
+    gap: 0.4rem;
+    overflow: hidden;
+}
+
+.streak-triangle {
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 10px solid #decb9e;
+    position: absolute;
+}
+
+.streak-label {
+    font-size: 20px;
+    font-weight: 600;
+    color: #333;
+    width: 100%;
+    background-color: rgba(255, 255, 255, 0.1); /* transparent look */
+    border: 2px solid #333; /* black outline */
+    border-radius: 8px; /* rounded edges */
+    padding: 5px;
+    margin-top: -15px;
+    box-sizing: border-box;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.flash-gold {
+    background: #decb9e !important;
+    border-radius: 8px;
+}
+
+.flash-gold-text {
+    color: #decb9e !important;
+    border-radius: 8px;
+}
+
+.triangle {
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 10px solid #decb9e;
+    position: absolute;
+    bottom: 40px; /* start above streak label */
+}
+
+.streak-label {
+  font-weight: bold;
+  color: black;
+  transition: color 0.5s ease;
+  border-radius: 8px;
+}
+
+.streak-label.gold {
+  color: #decb9e;
+  border-radius: 8px;
+}
+
+.triangle-container {
+  position: relative;
+  margin-top: 8px;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 8px;
+}
+
+.triangle.burst-up {
+  animation: burst-up 1s ease-out forwards, fade-out 1s forwards;
+}
+
+@keyframes burst-up {
+  0% { transform: translateY(0) rotate(0deg) scale(1); opacity: 1; }
+  100% { transform: translateY(-60px) rotate(360deg) scale(1.5); opacity: 0; }
+}
+
+@keyframes fade-out {
+  to { opacity: 0; }
+}
+
+
+@keyframes burst-move {
+  from { transform: translateY(0) scale(1); opacity: 1; }
+  to { transform: translateY(-30px) scale(1.5); opacity: 0; }
+}
+@keyframes fade-out {
+  to { opacity: 0; }
+}
+
+
+
+
+@keyframes zipAcross {
+    0% { transform: translateX(-150%); opacity: 0; }
+    30% { opacity: 1; }
+    100% { transform: translateX(0); opacity: 1; }
+}
+.streak-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    overflow: hidden;
+    flex-direction: column;
+    text-align: center;
+}
+
+.streak-text {
+    position: relative;
+    z-index: 2;
+    color: #decb9e;
+    font-family: "Segoe UI", sans-serif;
+    text-shadow: 0 0 20px rgba(255,215,0,0.9);
+}
+
+.streak-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.streak-days {
+    font-size: 3rem;
+    font-weight: bold;
+    margin-bottom: 0.8rem;
+}
+
+.streak-sub {
+    font-size: 1rem;
+    font-weight: 400;
+    color: #decb9e;
+}
+
+.triangle-rain {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.triangle-rain .triangle {
+    position: absolute;
+    top: -80px;
+    width: 0;
+    height: 0;
+    border-left: 40px solid transparent;
+    border-right: 40px solid transparent;
+    border-bottom: 70px solid #decb9e;
+    opacity: 0.9;
+    animation: triangleFall linear forwards;
+}
+
+@keyframes triangleFall {
+    0% { transform: translateY(-100px) rotate(0deg); opacity: 0.9; }
+    100% { transform: translateY(110vh) rotate(90deg); opacity: 0; }
+}
+
+.fade-out {
+    animation: fadeOutOverlay 0.7s ease forwards;
+}
+
+@keyframes fadeOutOverlay {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+
