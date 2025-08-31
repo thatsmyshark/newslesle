@@ -64,6 +64,7 @@ async function postJSON(path, payload) {
             await getValidHeadline();
         } else {
             showLimitPopup();
+            getValidHeadline(); // try preview fetch
         }
     } catch (err) {
         console.error("Failed to get status:", err);
@@ -81,12 +82,6 @@ function keyboardListener(e) {
     if (/^[A-Z]$/.test(key)) {
         handleLetterGuess(key);
     }
-}
-
-if (checkLimit()) {
-    getValidHeadline(); // Triggers the looped fetch with retry cap
-} else {
-    showLimitPopup(); // Rate limit hit — don’t fetch headline
 }
 
 /* =========================
@@ -136,6 +131,14 @@ function startGame() {
     gameActive = true;
     document.addEventListener("keydown", keyboardListener);
 }
+function showLimitPopup() {
+    const limitDiv = document.getElementById("limitMessage");
+    if (limitDiv) {
+        limitDiv.innerHTML = `All done! Come back tomorrow for more headlines to solve!`;
+        limitDiv.style.display = "block";
+    }
+}
+
 
 /* =========================
    Daily-limit functions
