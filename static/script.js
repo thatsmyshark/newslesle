@@ -644,10 +644,12 @@ async function renderSearchResults(filter) {
    - saveToHistory returns the server response for use
    ========================= */
 async function saveToHistory(headlineArg, scoreArg, timeTakenArg) {
+    const currentDateString = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
     const payload = {
         headline: headlineArg,
         score: scoreArg,
         timeTaken: timeTakenArg,
+        date: currentDateString,
         url: articleURL,
         sourceName: (window.__lastSourceName || ""),
         publishedAt: articlePublicationDate
