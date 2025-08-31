@@ -394,13 +394,22 @@ function updateScoreDisplay() {
     if (el) el.textContent = ` ${score.toFixed(1)}`;
 }
 
+
 /* =========================
    Calendar / History (server-backed)
    - uses GET /history which returns entries like:
      [{headline, score, timeTaken, date, url, sourceName, publishedAt}, ...]
    ========================= */
 
-async function renderCalendar(year, month) {
+function getLocalDateString() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`; // "YYYY-MM-DD"
+}
+
+   async function renderCalendar(year, month) {
     const panel = document.getElementById("historyPanel");
     const container = document.getElementById("calendarContainer");
     const results = document.getElementById("historyResults");
@@ -582,7 +591,6 @@ async function renderDayEntries(dateString, year = null, month = null) {
     });
 }
 
-
 async function renderSearchResults(filter) {
     const container = document.getElementById("calendarContainer");
     const results = document.getElementById("historyResults");
@@ -644,7 +652,7 @@ async function renderSearchResults(filter) {
    - saveToHistory returns the server response for use
    ========================= */
 async function saveToHistory(headlineArg, scoreArg, timeTakenArg) {
-    const currentDateString = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+    const currentDateString = getLocalDateString(); // "YYYY-MM-DD"
     const payload = {
         headline: headlineArg,
         score: scoreArg,
