@@ -17,6 +17,7 @@ let articleImage = null;
 let articleDescription = "";
 let articlePublicationDate = "";
 let lastKnownStreak = 0;
+let StreakCelebrationDate = null; // date string "YYYY-MM-DD" of last celebration
 let score = 0;
 let completedHeadlines = new Set(); // session-only cache (optional)
 let guessedCorrectLetters = new Set();
@@ -80,6 +81,12 @@ function keyboardListener(e) {
     if (/^[A-Z]$/.test(key)) {
         handleLetterGuess(key);
     }
+}
+
+if (checkLimit()) {
+    getValidHeadline(); // Triggers the looped fetch with retry cap
+} else {
+    showLimitPopup(); // Rate limit hit — don’t fetch headline
 }
 
 /* =========================
@@ -404,21 +411,24 @@ async function renderCalendar(year, month) {
     if (oldNav) oldNav.remove();
 
     const nav = document.createElement("div");
-    nav.className = "calendar-nav";
-    nav.innerHTML = `
-        <button class="prev" aria-label="Previous month">‹</button>
-        <div class="month-title">${year}-${String(month + 1).padStart(2,"0")}</div>
-        <button class="next" aria-label="Next month">›</button>
-    `;
-    panel.insertBefore(nav, container);
+        nav.className = "calendar-nav";
+        nav.innerHTML = `
+            <button class="prev" aria-label="Previous month">‹</button>
+            <div class="month-title">${year}-${String(month + 1).padStart(2,"0")}</div>
+            <button class="next" aria-label="Next month">›</button>
+        `;
+        panel.insertBefore(nav, container);
 
-    nav.querySelector(".prev").addEventListener("click", () => {
+    // attach click handlers like clear/back buttons
+    nav.querySelector(".prev").addEventListener("click", (e) => {
+        e.stopPropagation(); // prevent outside-click from firing
         let newMonth = month - 1;
         let newYear = year;
         if (newMonth < 0) { newMonth = 11; newYear = year - 1; }
         renderCalendar(newYear, newMonth);
     });
-    nav.querySelector(".next").addEventListener("click", () => {
+    nav.querySelector(".next").addEventListener("click", (e) => {
+        e.stopPropagation(); // prevent outside-click from firing
         let newMonth = month + 1;
         let newYear = year;
         if (newMonth > 11) { newMonth = 0; newYear = year + 1; }
@@ -499,44 +509,55 @@ async function renderCalendar(year, month) {
 async function renderDayEntries(dateString, year = null, month = null) {
     const container = document.getElementById("calendarContainer");
     const results = document.getElementById("historyResults");
-    if (!container || !results) return;
+    const panel = document.getElementById("historyPanel");
+    if (!container || !results || !panel) return;
 
-    // show results, hide calendar
+    // hide month calendar container and its nav
     container.style.display = "none";
-    results.style.display = "block";
+    const monthNav = panel.querySelector(".calendar-nav");
+    if (monthNav) monthNav.style.display = "none";
 
-    const nav = document.querySelector(".calendar-nav");
-    if (nav) nav.remove();
+    // show results container for day entries
+    results.style.display = "block";
+    results.innerHTML = "";
+
+    // Remove any old nav in results
+    const oldNav = results.querySelector(".calendar-nav");
+    if (oldNav) oldNav.remove();
+
+    // Day-navigation styled like month navigation
+    const dayNav = document.createElement("div");
+    dayNav.className = "calendar-nav day-nav";
+
+    const backBtn = document.createElement("button");
+    backBtn.className = "prev";
+    backBtn.setAttribute("aria-label", "Back to month");
+    backBtn.textContent = "‹";
+    backBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        // show the month calendar and nav again
+        container.style.display = "grid";
+        if (monthNav) monthNav.style.display = "flex";
+        results.style.display = "none";
+    });
+
+    const titleDiv = document.createElement("div");
+    titleDiv.className = "month-title";
+    titleDiv.textContent = dateString;
+
+    dayNav.appendChild(backBtn);
+    dayNav.appendChild(titleDiv);
+    results.prepend(dayNav);
 
     // fetch history
     const { json: history } = await getJSON("/history");
     const historyList = Array.isArray(history) ? history : [];
 
-    // build UI
-    results.innerHTML = "";
-    const backRow = document.createElement("div");
-    backRow.className = "history-back";
-    const backBtn = document.createElement("button");
-    backBtn.id = "backBtn";
-    backBtn.textContent = "←";
-    backBtn.onclick = () => {
-        const now = new Date();
-        renderCalendar(year ?? now.getFullYear(), month ?? now.getMonth());
-    };
-    const heading = document.createElement("h3");
-    heading.className = "history-day-date-heading";
-    heading.id = "dateHeading";
-    heading.textContent = dateString;
-
-    results.appendChild(backRow);
-    backRow.appendChild(backBtn);
-    backRow.appendChild(heading);
-
+    const entries = historyList.filter(h => h.date === dateString);
     const dayResults = document.createElement("div");
     dayResults.id = "dayResults";
     results.appendChild(dayResults);
 
-    const entries = historyList.filter(h => h.date === dateString);
     if (entries.length === 0) {
         const empty = document.createElement("div");
         empty.classList.add("empty-history");
@@ -545,6 +566,7 @@ async function renderDayEntries(dateString, year = null, month = null) {
         return;
     }
 
+    // Build UI for each entry
     entries.forEach(entry => {
         const div = document.createElement("div");
         div.classList.add("history-item");
@@ -556,6 +578,7 @@ async function renderDayEntries(dateString, year = null, month = null) {
         dayResults.appendChild(div);
     });
 }
+
 
 async function renderSearchResults(filter) {
     const container = document.getElementById("calendarContainer");
@@ -653,12 +676,9 @@ async function renderStreakDisplay() {
     let streakEl = document.getElementById("streakDisplay");
 
     if (!streakEl) {
-        const panel = document.getElementById("historyPanel");
-        if (!panel) return;
         streakEl = document.createElement("div");
         streakEl.id = "streakDisplay";
         streakEl.className = "streak-display";
-        panel.appendChild(streakEl);
     }
 
     streakEl.innerHTML = `
@@ -668,6 +688,20 @@ async function renderStreakDisplay() {
         <div class="triangle-container"></div>
     `;
     streakEl.dataset.streak = streak;
+
+    const panel = document.getElementById("historyPanel");
+    if (!panel) return;
+
+    // find existing nav
+    const nav = panel.querySelector(".calendar-nav");
+
+    if (nav) {
+        // insert streak display *before* nav
+        panel.insertBefore(streakEl, nav);
+    } else {
+        // if nav doesn't exist yet, just append normally
+        panel.appendChild(streakEl);
+    }
 }
 
 function triggerStreakAnimation() {
@@ -772,12 +806,9 @@ function showStreakCelebration(newStreak) {
 async function endGame(message) {
     stopStopwatch();
     const timeTaken = (Date.now() - startTime) / 1000;
-    const currentDateString = new Date().toLocaleDateString('en-CA');
+    const currentDateString = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
     const playerLost = wrongGuesses >= maxWrong;
     score = playerLost ? 0 : parseFloat((1000 / timeTaken).toFixed(1));
-    const articleImageElement = document.getElementById("articleImage");
-    const flipContainer = document.getElementById("flipContainer");
-    const flipResultText = document.getElementById("flipResultText");
 
     gameActive = false;
     document.removeEventListener("keydown", keyboardListener);
@@ -817,7 +848,24 @@ async function endGame(message) {
     const nextBtn = document.getElementById("nextArticleBtn");
     if (nextBtn) nextBtn.addEventListener("click", () => location.reload());
 
-    // Trigger flip with appropriate result
+    if (!playerLost && wordCompleted.every(Boolean)) {
+        // Save to server and get new streak
+        const playRes = await saveToHistory(headline, score, timeTaken);
+        let newStreak = 0;
+        if (playRes && typeof playRes.streak === "number") newStreak = playRes.streak;
+        else newStreak = await calculateStreak();
+
+        // Check last celebrated date in sessionStorage
+        const lastCelebratedDate = sessionStorage.getItem("lastStreakCelebrationDate");
+        if (lastCelebratedDate !== currentDateString) {
+            showStreakCelebration(newStreak);
+            sessionStorage.setItem("lastStreakCelebrationDate", currentDateString);
+        }
+    }
+
+    // Flip back to article image after a short delay
+    const flipContainer = document.getElementById("flipContainer");
+    const flipResultText = document.getElementById("flipResultText");
     if (flipResultText && flipContainer) {
         if (playerLost) {
             flipResultText.textContent = "Fail";
@@ -825,30 +873,9 @@ async function endGame(message) {
         } else if (wordCompleted.every(Boolean)) {
             flipResultText.textContent = "Success";
             flipContainer.classList.add("flip-success");
-
-            // Save to server (this increments daily count server-side and returns new streak)
-            const playRes = await saveToHistory(headline, score, timeTaken);
-            // playRes may contain {"status":"ok","streak":n} per server implementation
-            let newStreak = 0;
-            if (playRes && typeof playRes.streak === "number") {
-                newStreak = playRes.streak;
-            } else {
-                newStreak = await calculateStreak();
-            }
-
-            // session-only: mark today's completed headlines (optional)
-            completedHeadlines.add(currentDateString);
-
-            // celebration
-            if (newStreak > lastKnownStreak) {
-                showStreakCelebration(newStreak);
-            }
-
-            lastKnownStreak = newStreak; // update for next round
         }
     }
 
-    // Flip back to article image after a short delay
     setTimeout(() => {
         if (flipContainer) {
             flipContainer.classList.remove("flip-success", "flip-fail");
