@@ -1,3 +1,8 @@
+/* main.js — server-backed version (fully replaces localStorage) */
+
+/* =========================
+   Game state (unchanged)
+   ========================= */
 let gameActive = false;
 let headline = "";
 let articleURL = "";
@@ -12,15 +17,60 @@ let articleImage = null;
 let articleDescription = "";
 let articlePublicationDate = "";
 let score = 0;
-let completedHeadlines = new Set();
+let completedHeadlines = new Set(); // session-only cache (optional)
 let guessedCorrectLetters = new Set();
 let guessedIncorrectLetters = new Set();
-const MAX_DAILY_HEADLINES = 6;
-const DATE_KEY = "headlineDate";
-const COUNT_KEY = "headlineCount";
 
+/* =========================
+   Small server helpers
+   - All persistence now hits the Flask endpoints:
+     /status  (GET)  -> returns {canPlay, playsToday, maxDaily, streak, firstPlayDate}
+     /headline (GET) -> returns a headline or 429/204
+     /play     (POST)-> save a completed play {headline, score, timeTaken, url, sourceName, publishedAt}
+     /history  (GET/DELETE) -> list of history entries or clear
+   ========================= */
+
+async function getJSON(path, opts = {}) {
+    const res = await fetch(path, opts);
+    // If non-JSON (e.g., 204), handle elsewhere
+    if (res.status === 204) return null;
+    const json = await res.json().catch(() => null);
+    return { status: res.status, json, ok: res.ok };
+}
+
+async function postJSON(path, payload) {
+    const res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+    const json = await res.json().catch(() => null);
+    return { status: res.status, json, ok: res.ok };
+}
+
+/* =========================
+   Init: check limit using /status
+   (replaces checkLimit/localStorage check)
+   ========================= */
+(async function init() {
+    try {
+        const { json } = await getJSON("/status");
+        if (json && json.canPlay) {
+            await getValidHeadline(); // fetch headline (server ensures not already played)
+        } else {
+            showLimitPopup();
+        }
+    } catch (err) {
+        // if status fails, fall back to attempting to fetch a headline
+        console.error("Failed to get status:", err);
+        await getValidHeadline();
+    }
+})();
+
+/* =========================
+   Keyboard handling (unchanged)
+   ========================= */
 function keyboardListener(e) {
-    if (e.metaKey || e.ctrlKey) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const key = e.key.toUpperCase();
     if (/^[A-Z]$/.test(key)) {
@@ -28,110 +78,100 @@ function keyboardListener(e) {
     }
 }
 
-// Only check limit before any fetch
-if (checkLimit()) {
-    getValidHeadline(); // Triggers the looped fetch with retry cap
-} else {
-    showLimitPopup(); // Rate limit hit — don’t fetch headline
-}
-
-function getValidHeadline(attempts = 0) {
+/* =========================
+   HEADLINE fetching
+   - uses /headline endpoint (server filters played headlines)
+   - handles 429 (limit), 204 (no new headlines), and success
+   ========================= */
+async function getValidHeadline(attempts = 0) {
     if (attempts >= 5) {
         alert("No new headlines available.");
         return;
     }
 
-    fetch("/headline")
-        .then(res => res.json())
-        .then(data => {
-            const completed = new Set(JSON.parse(localStorage.getItem("completedHeadlines")) || []);
-            if (completed.has(data.headline)) {
-                // Retry
-                getValidHeadline(attempts + 1);
-            } else {
-                setupGame(data);            // Start the game
+    try {
+        const res = await fetch("/headline");
+        if (res.status === 429) {
+            // user hit limit
+            showLimitPopup();
+            // server supports previewing an image — try preview fetch
+            const preview = await fetch("/headline?preview=1").then(r => r.json()).catch(() => null);
+            if (preview && preview.urlToImage) {
+                articleImage = preview.urlToImage;
+                const articleImageElement = document.getElementById("articleImage");
+                if (articleImageElement) {
+                    articleImageElement.src = articleImage;
+                    articleImageElement.style.display = "block";
+                }
             }
-        })
-        .catch(err => {
-            console.error("Failed to fetch headline:", err);
-        });
+            return;
+        }
+        if (res.status === 204) {
+            alert("No new headlines available.");
+            return;
+        }
+        const data = await res.json();
+        // server should only return unseen headlines; directly setup
+        setupGame(data);
+    } catch (err) {
+        console.error("Failed to fetch headline:", err);
+    }
 }
+
+/* =========================
+   Start / stop game listeners
+   ========================= */
 function startGame() {
     gameActive = true;
     document.addEventListener("keydown", keyboardListener);
 }
 
-function incrementDailyCount() {
-    const today = new Date().toLocaleDateString('en-CA');
-    const savedDate = localStorage.getItem(DATE_KEY);
-    let count = parseInt(localStorage.getItem(COUNT_KEY) || "0");
+/* =========================
+   Daily-limit functions
+   - replaced local increment/check with server-driven endpoints via /status and /play
+   - incrementDailyCount is no longer necessary because /play saves and enforces cap server-side.
+   - we keep a helper that calls /status for "checkLimit" behaviour
+   ========================= */
 
-    if (savedDate !== today) {
-        localStorage.setItem(DATE_KEY, today);
-        localStorage.setItem(COUNT_KEY, "1");
-    } else {
-        localStorage.setItem(COUNT_KEY, (count + 1).toString());
-    }
-}   
-function checkLimit() {
-    const today = new Date().toLocaleDateString('en-CA');
-    const savedDate = localStorage.getItem(DATE_KEY);
-    let count = parseInt(localStorage.getItem(COUNT_KEY) || "0");
-
-    if (savedDate !== today) {
-        localStorage.setItem(DATE_KEY, today);
-        localStorage.setItem(COUNT_KEY, "1");
+async function checkLimit() {
+    // returns boolean; used elsewhere before fetching
+    try {
+        const { json } = await getJSON("/status");
+        return json ? json.canPlay : true;
+    } catch (err) {
+        console.error("checkLimit error:", err);
+        // assume allowed if endpoint fails (to not block)
         return true;
     }
+}
 
-    if (count < MAX_DAILY_HEADLINES) {
-        return true;
+// debug: server-side reset of history (DELETE /history)
+window.resetDailyLimitDebug = async function() {
+    try {
+        const { status, json } = await fetch("/history", { method: "DELETE" }).then(r => ({ status: r.status, json: r.status === 200 ? r.json() : null })).catch(() => ({ status: 500 }));
+        console.log("Server history cleared (status):", status);
+    } catch (err) {
+        console.error("Reset debug failed:", err);
     }
+};
 
-    return false;
-}
-function showLimitPopup() {
-    const limitDiv = document.getElementById("limitMessage");
-    if (limitDiv) {
-        limitDiv.innerHTML = `All done! Come back tomorrow for more headlines to solve!`;
-        limitDiv.style.display = "block";
+window.CheckCountDebug = async function() {
+    try {
+        const { json } = await getJSON("/status");
+        console.log("Plays today (server):", json ? json.playsToday : "unknown");
+    } catch (err) {
+        console.error("CheckCountDebug failed:", err);
     }
+};
 
-    // Still load the image
-    fetch("/headline")
-        .then(res => res.json())
-        .then(data => {
-            articleImage = data.urlToImage;
-            const articleImageElement = document.getElementById("articleImage");
-            if (articleImage && articleImageElement) {
-                articleImageElement.src = articleImage;
-                articleImageElement.style.display = "block";
-            }
-        });
-}
-function formatDateSimple(isoString) {
-    if (!isoString) return "";
-    const date = new Date(isoString);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0"); // JS months are 0-based
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-}
-window.resetDailyLimitDebug = function() {
-    localStorage.removeItem("headlineCount");
-    localStorage.removeItem("headlineDate");
-    console.log("Daily play count reset.");
-};  
-window.CheckCountDebug = function() {
-    const count = parseInt(localStorage.getItem("headlineCount") || "0");
-    console.log("Sending count to server:", count);
-}
 window.CheckCurrentDate = function() {
     const today = new Date().toLocaleDateString('en-CA');
     console.log("Current date:", today);
-}
+};
 
-
+/* =========================
+   Setup game display (unchanged logic)
+   ========================= */
 function setupGame(data) {
     startGame();
     headline = data.headline;
@@ -141,23 +181,42 @@ function setupGame(data) {
     articleURL = data.url;
     articleImage = data.urlToImage;
     articleDescription = data.description;
-    articlePublicationDate = data.publishedAt; // ISO string like "2025-08-15T12:34:56Z"
+    articlePublicationDate = data.publishedAt; // ISO string
 
-    document.getElementById("regionTag").innerHTML = 
-    `Retrieved from: <strong>${data.sourceName || "News Outlet Name"}</strong> (Published on: <strong>${formatDateSimple(articlePublicationDate)}</strong>)`;
+    const regionTagEl = document.getElementById("regionTag");
+    if (regionTagEl) {
+        regionTagEl.innerHTML = `Retrieved from: <strong>${data.sourceName || "News Outlet Name"}</strong> (Published on: <strong>${formatDateSimple(articlePublicationDate)}</strong>)`;
+    }
 
     updateIncorrectGuessesDisplay();
     updateDisplay();
     renderAlphabet();
 }
+
+/* =========================
+   Utilities (unchanged)
+   ========================= */
+function formatDateSimple(isoString) {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
+
 function titleCase(str) {
     return str.toLowerCase().split(' ').map(word =>
         word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ');
 }
 
+/* =========================
+   Display update (unchanged)
+   ========================= */
 function updateDisplay() {
     const wordDisplay = document.getElementById("wordDisplay");
+    if (!wordDisplay) return;
     wordDisplay.innerHTML = "";
     let isComplete = true;
     let composedHeadline = "";
@@ -190,32 +249,43 @@ function updateDisplay() {
     });
 
     if (isComplete) {
-        document.getElementById("wordDisplay").style.display = "none";
+        wordDisplay.style.display = "none";
         const aestheticBox = document.getElementById("aestheticBox");
-        aestheticBox.style.display = "block";
-        document.getElementById("aestheticHeadline").textContent = titleCase(composedHeadline.trim());
-        document.getElementById("headlineSynopsis").textContent = articleDescription;
-        document.getElementById("regionTag").style.display = "block";
-        document.getElementById("headlineSynopsis").style.display = "block";
-        aestheticBox.classList.add("fade-in");
+        if (aestheticBox) aestheticBox.style.display = "block";
+        const aestheticHeadline = document.getElementById("aestheticHeadline");
+        if (aestheticHeadline) aestheticHeadline.textContent = titleCase(composedHeadline.trim());
+        const synopsisEl = document.getElementById("headlineSynopsis");
+        if (synopsisEl) synopsisEl.textContent = articleDescription;
+        const regionTag = document.getElementById("regionTag");
+        if (regionTag) regionTag.style.display = "block";
+        if (synopsisEl) synopsisEl.style.display = "block";
+        if (aestheticBox) aestheticBox.classList.add("fade-in");
     } else {
-        document.getElementById('regionTag').style.display = 'none';
-        document.getElementById('headlineSynopsis').style.display = 'none';
+        const regionTag = document.getElementById('regionTag');
+        const synopsis = document.getElementById('headlineSynopsis');
+        if (regionTag) regionTag.style.display = 'none';
+        if (synopsis) synopsis.style.display = 'none';
     }
 
     const articleImageElement = document.getElementById("articleImage");
-    if (articleImage) {
-        articleImageElement.src = articleImage;
-        articleImageElement.style.display = "block";
-    } else {
-        articleImageElement.style.display = "none";
+    if (articleImageElement) {
+        if (articleImage) {
+            articleImageElement.src = articleImage;
+            articleImageElement.style.display = "block";
+        } else {
+            articleImageElement.style.display = "none";
+        }
     }
 
     renderAlphabet();
-
 }
+
+/* =========================
+   Alphabet rendering & guesses (unchanged)
+   ========================= */
 function renderAlphabet() {
     const container = document.getElementById("alphabetDisplay");
+    if (!container) return;
     container.innerHTML = "";
 
     for (let i = 65; i <= 90; i++) {
@@ -234,10 +304,12 @@ function renderAlphabet() {
         container.appendChild(span);
     }
 }
+
 function updateIncorrectGuessesDisplay() {
-    const remaining = maxWrong - wrongGuesses;
-    document.getElementById("incorrectGuessesDisplay").textContent = `${remaining}`;
+    const el = document.getElementById("incorrectGuessesDisplay");
+    if (el) el.textContent = `${maxWrong - wrongGuesses}`;
 }
+
 function handleLetterGuess(letter) {
     if (!/^[A-Z]$/.test(letter)) return;
     if (!startTime) startStopwatch();
@@ -284,41 +356,49 @@ function handleLetterGuess(letter) {
     renderAlphabet();
 }
 
-function startStopwatch() { // Start the stopwatch when the first letter is guessed
+/* =========================
+   Stopwatch & score (unchanged)
+   ========================= */
+function startStopwatch() {
     startTime = Date.now();
     timerInterval = setInterval(updateStopwatch, 100);
 }
-function updateStopwatch() { // Update the stopwatch display every 100ms
+
+function updateStopwatch() {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    document.getElementById("StopwatchDisplay").textContent = ` ${elapsed}s`;
+    const el = document.getElementById("StopwatchDisplay");
+    if (el) el.textContent = ` ${elapsed}s`;
 }
-function stopStopwatch() { // Stop the stopwatch without resetting
+
+function stopStopwatch() {
     clearInterval(timerInterval);
     timerInterval = null;
-    // Do NOT reset startTime or change the text content.
 }
-function updateScoreDisplay() { // Update the score display based on the time taken
-    document.getElementById("ScoreDisplay").textContent = ` ${score.toFixed(1)}`;
-}
-/* ---------------------------
-   Calendar rendering + helpers
-   --------------------------- */
 
-function renderCalendar(year, month) {
+function updateScoreDisplay() {
+    const el = document.getElementById("ScoreDisplay");
+    if (el) el.textContent = ` ${score.toFixed(1)}`;
+}
+
+/* =========================
+   Calendar / History (server-backed)
+   - uses GET /history which returns entries like:
+     [{headline, score, timeTaken, date, url, sourceName, publishedAt}, ...]
+   ========================= */
+
+async function renderCalendar(year, month) {
     const panel = document.getElementById("historyPanel");
     const container = document.getElementById("calendarContainer");
     const results = document.getElementById("historyResults");
+    if (!panel || !container || !results) return;
 
-    // hide results, show container
     results.style.display = "none";
     container.style.display = "grid";
     container.innerHTML = "";
 
-    // remove old nav if present (prevents duplicates)
     const oldNav = panel.querySelector(".calendar-nav");
     if (oldNav) oldNav.remove();
 
-    // build month nav and insert before the calendar container
     const nav = document.createElement("div");
     nav.className = "calendar-nav";
     nav.innerHTML = `
@@ -342,18 +422,19 @@ function renderCalendar(year, month) {
     });
 
     // load history and build lookup map by date (YYYY-MM-DD)
-    const history = JSON.parse(localStorage.getItem("newslesleHistory")) || [];
+    const { json: history } = await getJSON("/history");
+    const historyList = Array.isArray(history) ? history : [];
     const historyMap = {};
-    history.forEach(entry => {
+    historyList.forEach(entry => {
         if (!entry.date) return;
         historyMap[entry.date] = historyMap[entry.date] || [];
         historyMap[entry.date].push(entry);
     });
 
-    // firstPlay (use stored firstPlayDate if available)
-    const firstPlayRaw = localStorage.getItem("firstPlayDate") || new Date().toISOString().split("T")[0];
+    // get firstPlayDate from /status if available
+    const { json: statusJson } = await getJSON("/status");
+    const firstPlayRaw = (statusJson && statusJson.firstPlayDate) ? statusJson.firstPlayDate : new Date().toISOString().split("T")[0];
     const firstPlay = new Date(firstPlayRaw + "T00:00:00");
-    // today at midnight (local)
     const todayRaw = new Date().toISOString().split("T")[0];
     const today = new Date(todayRaw + "T00:00:00");
 
@@ -391,19 +472,14 @@ function renderCalendar(year, month) {
         const afterToday = dateObj > today;
         const hasPlays = !!historyMap[dateStr];
 
-        // completed headline = has plays
         if (hasPlays) {
             dayEl.classList.add("completed");
             dayEl.addEventListener("click", () => {
                 renderDayEntries(dateStr, year, month);
             });
-        }
-        // greyed out only if before first play OR after today OR no plays and before current day
-        else if (beforeFirstPlay || afterToday) {
+        } else if (beforeFirstPlay || afterToday) {
             dayEl.classList.add("greyed");
-        }
-        // available but unplayed
-        else {
+        } else {
             dayEl.classList.add("clickable");
             dayEl.addEventListener("click", () => {
                 renderDayEntries(dateStr, year, month);
@@ -412,77 +488,51 @@ function renderCalendar(year, month) {
 
         container.appendChild(dayEl);
     }
+
+    await renderStreakDisplay(); // Update streak after calendar renders
 }
 
-function renderDayEntries(dateString, year = null, month = null) {
+async function renderDayEntries(dateString, year = null, month = null) {
     const container = document.getElementById("calendarContainer");
     const results = document.getElementById("historyResults");
-    const history = JSON.parse(localStorage.getItem("newslesleHistory")) || [];
+    if (!container || !results) return;
 
     // show results, hide calendar
     container.style.display = "none";
     results.style.display = "block";
 
-    // remove month nav if present
     const nav = document.querySelector(".calendar-nav");
     if (nav) nav.remove();
 
-    // try to reuse existing elements from HTML (non-destructive)
-    let backRow = results.querySelector(".history-back");
-    let backBtn = results.querySelector("#backBtn");
-    let heading = results.querySelector("#dateHeading");
-    let dayResults = results.querySelector("#dayResults");
+    // fetch history
+    const { json: history } = await getJSON("/history");
+    const historyList = Array.isArray(history) ? history : [];
 
-    // create missing pieces
-    if (!backRow) {
-        backRow = document.createElement("div");
-        backRow.className = "history-back";
-    }
-    if (!backBtn) {
-        backBtn = document.createElement("button");
-        backBtn.id = "backBtn";
-        backBtn.textContent = "←";
-    }
-    if (!heading) {
-        heading = document.createElement("h3");
-        heading.className = "history-day-date-heading";
-        heading.id = "dateHeading";
-    }
-    if (!dayResults) {
-        dayResults = document.createElement("div");
-        dayResults.id = "dayResults";
-    }
-
-    // If results container does not already contain #dayResults, reset results and append
-    if (!results.querySelector("#dayResults")) {
-        results.innerHTML = "";
-        results.appendChild(backRow);
-        results.appendChild(dayResults);
-    } else {
-        // ensure backRow exists and sits before dayResults
-        if (!results.contains(backRow)) {
-            results.insertBefore(backRow, dayResults);
-        }
-    }
-
-    // ensure backRow contains the button and heading in the right order
-    if (!backRow.contains(backBtn)) backRow.appendChild(backBtn);
-    if (!backRow.contains(heading)) backRow.appendChild(heading);
-
-    // clear only the dayResults area
-    dayResults.innerHTML = "";
-
-    // set up back button (assign to avoid adding duplicate listeners)
+    // build UI
+    results.innerHTML = "";
+    const backRow = document.createElement("div");
+    backRow.className = "history-back";
+    const backBtn = document.createElement("button");
+    backBtn.id = "backBtn";
+    backBtn.textContent = "←";
     backBtn.onclick = () => {
         const now = new Date();
         renderCalendar(year ?? now.getFullYear(), month ?? now.getMonth());
     };
-
-    // set heading
+    const heading = document.createElement("h3");
+    heading.className = "history-day-date-heading";
+    heading.id = "dateHeading";
     heading.textContent = dateString;
 
-    // populate entries for the day
-    const entries = history.filter(h => h.date === dateString);
+    results.appendChild(backRow);
+    backRow.appendChild(backBtn);
+    backRow.appendChild(heading);
+
+    const dayResults = document.createElement("div");
+    dayResults.id = "dayResults";
+    results.appendChild(dayResults);
+
+    const entries = historyList.filter(h => h.date === dateString);
     if (entries.length === 0) {
         const empty = document.createElement("div");
         empty.classList.add("empty-history");
@@ -503,54 +553,24 @@ function renderDayEntries(dateString, year = null, month = null) {
     });
 }
 
-function renderSearchResults(filter) {
+async function renderSearchResults(filter) {
     const container = document.getElementById("calendarContainer");
     const results = document.getElementById("historyResults");
-    const history = JSON.parse(localStorage.getItem("newslesleHistory")) || [];
+    if (!container || !results) return;
 
     container.style.display = "none";
     results.style.display = "block";
+    results.innerHTML = "";
 
-    // remove month nav if present
-    const nav = document.querySelector(".calendar-nav");
-    if (nav) nav.remove();
+    // fetch history
+    const { json: history } = await getJSON("/history");
+    const historyList = Array.isArray(history) ? history : [];
 
-    // reuse/ensure header + dayResults exist (same logic as renderDayEntries)
-    let backRow = results.querySelector(".history-back");
-    let backBtn = results.querySelector("#backBtn");
-    let heading = results.querySelector("#dateHeading");
-    let dayResults = results.querySelector("#dayResults");
-
-    if (!backRow) {
-        backRow = document.createElement("div");
-        backRow.className = "history-back";
-    }
-    if (!backBtn) {
-        backBtn = document.createElement("button");
-        backBtn.id = "backBtn";
-        backBtn.textContent = "← Back to month";
-    }
-    if (!heading) {
-        heading = document.createElement("h3");
-        heading.className = "history-day-date-heading";
-        heading.id = "dateHeading";
-    }
-    if (!dayResults) {
-        dayResults = document.createElement("div");
-        dayResults.id = "dayResults";
-    }
-
-    if (!results.querySelector("#dayResults")) {
-        results.innerHTML = "";
-        results.appendChild(backRow);
-        results.appendChild(dayResults);
-    } else {
-        if (!results.contains(backRow)) results.insertBefore(backRow, dayResults);
-    }
-
-    if (!backRow.contains(backBtn)) backRow.appendChild(backBtn);
-    if (!backRow.contains(heading)) backRow.appendChild(heading);
-
+    const backRow = document.createElement("div");
+    backRow.className = "history-back";
+    const backBtn = document.createElement("button");
+    backBtn.id = "backBtn";
+    backBtn.textContent = "← Back to month";
     backBtn.onclick = () => {
         const now = new Date();
         renderCalendar(now.getFullYear(), now.getMonth());
@@ -558,15 +578,20 @@ function renderSearchResults(filter) {
         if (search) search.value = "";
     };
 
+    results.appendChild(backRow);
+    backRow.appendChild(backBtn);
+
+    const heading = document.createElement("h3");
+    heading.className = "history-day-date-heading";
+    heading.id = "dateHeading";
     heading.textContent = `Search results: "${filter}"`;
+    results.appendChild(heading);
 
-    dayResults.innerHTML = "";
-
-    const matches = history.filter(entry => entry.headline.toLowerCase().includes(filter.toLowerCase()));
+    const matches = historyList.filter(entry => entry.headline.toLowerCase().includes(filter.toLowerCase()));
     if (matches.length === 0) {
         const none = document.createElement("div");
         none.textContent = `No history items match "${filter}".`;
-        dayResults.appendChild(none);
+        results.appendChild(none);
         return;
     }
 
@@ -579,40 +604,168 @@ function renderSearchResults(filter) {
             <div>Score: ${entry.score}</div>
             <div>Time: ${parseFloat(entry.timeTaken).toFixed(1)}s</div>
         `;
-        dayResults.appendChild(div);
+        results.appendChild(div);
     });
 }
 
-function saveToHistory(headline, score, timeTaken) {
-    const history = JSON.parse(localStorage.getItem("newslesleHistory")) || [];
-    const todayDate = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+/* =========================
+   Saving history / play
+   - POST to /play (server enforces daily cap and returns status)
+   - saveToHistory returns the server response for use
+   ========================= */
+async function saveToHistory(headlineArg, scoreArg, timeTakenArg) {
+    const payload = {
+        headline: headlineArg,
+        score: scoreArg,
+        timeTaken: timeTakenArg,
+        url: articleURL,
+        sourceName: (window.__lastSourceName || ""),
+        publishedAt: articlePublicationDate
+    };
+    try {
+        const { status, json } = await postJSON("/play", payload);
+        if (status === 429) {
+            // server says daily cap reached (race condition)
+            showLimitPopup();
+        }
+        return json;
+    } catch (err) {
+        console.error("saveToHistory error:", err);
+        return null;
+    }
+}
 
-    // Save firstPlayDate if not already set
-    if (!localStorage.getItem("firstPlayDate")) {
-        localStorage.setItem("firstPlayDate", todayDate);
+/* =========================
+   Streak calculations & UI
+   - Uses /status for quick info where possible
+   ========================= */
+async function calculateStreak() {
+    const { json } = await getJSON("/status");
+    return json && typeof json.streak === "number" ? json.streak : 0;
+}
+
+async function renderStreakDisplay() {
+    const streak = await calculateStreak();
+    let streakEl = document.getElementById("streakDisplay");
+
+    if (!streakEl) {
+        const panel = document.getElementById("historyPanel");
+        if (!panel) return;
+        streakEl = document.createElement("div");
+        streakEl.id = "streakDisplay";
+        streakEl.className = "streak-display";
+        panel.appendChild(streakEl);
     }
 
-    // Add the new entry with the date
-    history.push({ 
-        headline, 
-        score, 
-        timeTaken, 
-        date: todayDate // << Calendar key
-    });
-
-    localStorage.setItem("newslesleHistory", JSON.stringify(history));
-
-    // Save completed headlines for exclusion in getValidHeadline()
-    const completed = new Set(JSON.parse(localStorage.getItem("completedHeadlines")) || []);
-    completed.add(headline);
-    localStorage.setItem("completedHeadlines", JSON.stringify([...completed]));
-
-    // No more direct list rendering — calendar handles it now
+    streakEl.innerHTML = `
+        <div class="streak-box">
+            <div class="streak-label">${streak} Day${streak === 1 ? "" : "s"} Streak</div>
+        </div>
+        <div class="triangle-container"></div>
+    `;
+    streakEl.dataset.streak = streak;
 }
 
+function triggerStreakAnimation() {
+    const streakEl = document.getElementById("streakDisplay");
+    if (!streakEl) return;
 
+    const streak = parseInt(streakEl.dataset.streak || "0", 10);
+    const label = streakEl.querySelector(".streak-label");
+    const box = streakEl.querySelector(".streak-box");
+    if (!label || !box) return;
 
-function endGame(message) { // End the game and display the result
+    label.classList.add("flash-gold-text");
+
+    setTimeout(() => {
+        box.classList.remove("flash-gold");
+        label.classList.remove("flash-gold-text");
+
+        const panel = document.getElementById("historyPanel");
+        const rect = label.getBoundingClientRect();
+        const panelRect = panel.getBoundingClientRect();
+        const startX = rect.left + rect.width / 2 - panelRect.left;
+        const startY = rect.top - panelRect.top;
+
+        const triangleCount = Math.min(streak * 6, 40);
+        const triangles = [];
+
+        function seededRandom(seed) {
+            const x = Math.sin(seed) * 10000;
+            return x - Math.floor(x);
+        }
+
+        for (let i = 0; i < triangleCount; i++) {
+            const t = document.createElement("div");
+            t.className = "streak-triangle";
+            t.style.position = "absolute";
+            t.style.left = `${startX}px`;
+            t.style.top = `${startY}px`;
+
+            const size = 6 + seededRandom(i + 10) * 12;
+            t.style.borderLeft = `${size}px solid transparent`;
+            t.style.borderRight = `${size}px solid transparent`;
+            t.style.borderBottom = `${size * 1.5}px solid #decb9e`;
+
+            const dx = seededRandom(i + 1) * 120 - 60;
+            const dy = -(seededRandom(i + 2) * 100 + 50);
+            const rot = seededRandom(i + 3) * 720 - 360;
+            const duration = 800 + seededRandom(i + 4) * 800;
+
+            t.animate([
+                { transform: 'translate(0,0) rotate(0deg)', opacity: 1 },
+                { transform: `translate(${dx}px, ${dy}px) rotate(${rot}deg)`, opacity: 0 }
+            ], { duration: duration, easing: 'ease-out', fill: 'forwards' });
+
+            panel.appendChild(t);
+            triangles.push(t);
+        }
+
+        setTimeout(() => {
+            triangles.forEach(t => t.remove());
+        }, 1800);
+
+    }, 500);
+}
+
+function showStreakCelebration(newStreak) {
+    const overlay = document.createElement("div");
+    overlay.className = "streak-overlay";
+
+    const dayLabel = newStreak === 1 ? "day" : "days";
+
+    overlay.innerHTML = `
+        <div class="streak-text">
+            <div class="streak-days">${newStreak} ${dayLabel} streak!</div>
+            <div class="streak-sub">Come back tomorrow to keep it going!</div>
+        </div>
+        <div class="triangle-rain"></div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const rain = overlay.querySelector(".triangle-rain");
+    for (let i = 0; i < 25; i++) {
+        const t = document.createElement("div");
+        t.className = "triangle";
+        t.style.left = `${Math.random() * 100}vw`;
+        t.style.animationDelay = `${Math.random() * 1.5}s`;
+        t.style.animationDuration = `${1.5 + Math.random()}s`;
+        rain.appendChild(t);
+    }
+
+    overlay.addEventListener("click", () => {
+        overlay.classList.add("fade-out");
+        setTimeout(() => overlay.remove(), 700);
+    });
+}
+
+/* =========================
+   END GAME (finish)
+   - On win: POST to /play to save play and get the new streak (server increments)
+   - On lose: just show fail state
+   ========================= */
+async function endGame(message) {
     stopStopwatch();
     const timeTaken = (Date.now() - startTime) / 1000;
     const currentDateString = new Date().toLocaleDateString('en-CA');
@@ -624,105 +777,190 @@ function endGame(message) { // End the game and display the result
 
     gameActive = false;
     document.removeEventListener("keydown", keyboardListener);
-    document.getElementById("wordDisplay").style.display = "none";
+    const wordDisplay = document.getElementById("wordDisplay");
+    if (wordDisplay) wordDisplay.style.display = "none";
 
     const aestheticBox = document.getElementById("aestheticBox");
-    aestheticBox.style.display = "block";
+    if (aestheticBox) aestheticBox.style.display = "block";
 
     const aestheticHeadline = document.getElementById("aestheticHeadline");
     const synopsisEl = document.getElementById("headlineSynopsis");
     const regionTag = document.getElementById("regionTag");
     const publicationDateEl = document.getElementById("publicationDate");
 
-    aestheticHeadline.textContent = titleCase(headline);
-    synopsisEl.textContent = articleDescription;
-    regionTag.style.display = "block";
-    synopsisEl.style.display = "block";
-    publicationDateEl.style.display = "block";
+    if (aestheticHeadline) aestheticHeadline.textContent = titleCase(headline);
+    if (synopsisEl) synopsisEl.textContent = articleDescription;
+    if (regionTag) regionTag.style.display = "block";
+    if (synopsisEl) synopsisEl.style.display = "block";
+    if (publicationDateEl) publicationDateEl.style.display = "block";
 
-    aestheticBox.classList.add("fade-in");
-    regionTag.classList.add("fade-in");
-    synopsisEl.classList.add("fade-in");
-    publicationDateEl.classList.add("fade-in");
+    if (aestheticBox) aestheticBox.classList.add("fade-in");
+    if (regionTag) regionTag.classList.add("fade-in");
+    if (synopsisEl) synopsisEl.classList.add("fade-in");
+    if (publicationDateEl) publicationDateEl.classList.add("fade-in");
 
     const actionLinks = document.createElement("div");
     actionLinks.classList.add("endgame-links");
-
     actionLinks.innerHTML = `
         <a href="${articleURL}" target="_blank" class="aesthetic-button">Read Full Article</a>
         <button class="aesthetic-button" id="nextArticleBtn">Next Article</button>
     `;
 
-    const existingLinks = aestheticBox.querySelector(".endgame-links");
+    const existingLinks = aestheticBox ? aestheticBox.querySelector(".endgame-links") : null;
     if (existingLinks) existingLinks.remove();
+    if (aestheticBox) aestheticBox.appendChild(actionLinks);
 
-    aestheticBox.appendChild(actionLinks);
-
-    document.getElementById("nextArticleBtn").addEventListener("click", () => location.reload());
-    // Remove any existing flip state
-    // flipContainer.classList.remove("flip-success", "flip-fail");
+    const nextBtn = document.getElementById("nextArticleBtn");
+    if (nextBtn) nextBtn.addEventListener("click", () => location.reload());
 
     // Trigger flip with appropriate result
-    if (playerLost) {
-        flipResultText.textContent = "Fail";
-        flipContainer.classList.add("flip-fail");
-    } else if (wordCompleted.every(Boolean)) {
-        flipResultText.textContent = "Success";
-        flipContainer.classList.add("flip-success");
-        incrementDailyCount();
-        completedHeadlines.add(currentDateString); // e.g., "2025-08-11"
-        saveToHistory(headline, score, (Date.now() - startTime) / 1000);
+    if (flipResultText && flipContainer) {
+        if (playerLost) {
+            flipResultText.textContent = "Fail";
+            flipContainer.classList.add("flip-fail");
+        } else if (wordCompleted.every(Boolean)) {
+            flipResultText.textContent = "Success";
+            flipContainer.classList.add("flip-success");
+
+            // Save to server (this increments daily count server-side and returns new streak)
+            const playRes = await saveToHistory(headline, score, timeTaken);
+            // playRes may contain {"status":"ok","streak":n} per server implementation
+            let newStreak = 0;
+            if (playRes && typeof playRes.streak === "number") {
+                newStreak = playRes.streak;
+            } else {
+                newStreak = await calculateStreak();
+            }
+
+            // session-only: mark today's completed headlines (optional)
+            completedHeadlines.add(currentDateString);
+
+            // celebration
+            showStreakCelebration(newStreak);
+        }
     }
 
-    //Flip back to article image after 5 seconds
-        setTimeout(() => {
+    // Flip back to article image after a short delay
+    setTimeout(() => {
+        if (flipContainer) {
             flipContainer.classList.remove("flip-success", "flip-fail");
             flipContainer.style.setProperty("margin-bottom", "-1rem", "important");
-        }, 3000);
+        }
+    }, 3000);
 
-    
     updateScoreDisplay();
-} 
+}
 
-// History Panel Toggle and Search Functionality
+/* =========================
+   History panel toggles & wiring (unchanged UX)
+   - Use server endpoints for data
+   ========================= */
+
 const historyToggle = document.getElementById("historyToggle");
 const historyPanel = document.getElementById("historyPanel");
+if (historyToggle && historyPanel) {
+    historyToggle.addEventListener("click", (event) => {
+        historyPanel.classList.add("open");
+        historyToggle.style.display = "none";
 
-historyToggle.addEventListener("click", (event) => {
-    historyPanel.classList.add("open");
-    historyToggle.style.display = "none";
+        // Render the current month when the panel opens
+        const now = new Date();
+        renderCalendar(now.getFullYear(), now.getMonth());
 
-    // Render the current month when the panel opens
-    const now = new Date();
-    renderCalendar(now.getFullYear(), now.getMonth());
+        // Trigger streak animation once panel is open
+        setTimeout(() => triggerStreakAnimation(), 300);
 
-    // Delay adding the outside-click listener to avoid immediate close
-    setTimeout(() => {
-        document.addEventListener("click", handleOutsideClick);
-    }, 0);
-});
+        // Delay adding the outside-click listener to avoid immediate close
+        setTimeout(() => {
+            document.addEventListener("click", handleOutsideClick);
+        }, 0);
+    });
+}
 
 function handleOutsideClick(event) {
-    // If the click is outside the historyPanel, close it and show toggle again
+    if (!historyPanel) return;
     if (!historyPanel.contains(event.target)) {
         historyPanel.classList.remove("open");
-        historyToggle.style.display = "inline-block";
+        if (historyToggle) historyToggle.style.display = "inline-block";
         document.removeEventListener("click", handleOutsideClick);
     }
 }
-document.getElementById("historySearch").addEventListener("input", (e) => {
-    if (e.target.value.trim() === "") {
-        const now = new Date();
-        renderCalendar(now.getFullYear(), now.getMonth());
-    } else {
-        renderSearchResults(e.target.value);
+
+const historySearchEl = document.getElementById("historySearch");
+if (historySearchEl) {
+    historySearchEl.addEventListener("input", (e) => {
+        if (e.target.value.trim() === "") {
+            const now = new Date();
+            renderCalendar(now.getFullYear(), now.getMonth());
+        } else {
+            renderSearchResults(e.target.value);
+        }
+    });
+}
+
+const clearHistoryBtn = document.getElementById("clearHistoryBtn");
+if (clearHistoryBtn) {
+    clearHistoryBtn.addEventListener("click", async () => {
+        if (confirm("Clear all saved history?")) {
+            // clear server history via DELETE /history
+            try {
+                const res = await fetch("/history", { method: "DELETE" });
+                if (res.ok) {
+                    const now = new Date();
+                    renderCalendar(now.getFullYear(), now.getMonth());
+                } else {
+                    alert("Failed to clear history on server.");
+                }
+            } catch (err) {
+                console.error("Failed to clear history:", err);
+            }
+        }
+    });
+}
+
+/* =========================
+   Extra little helpers/visuals you had
+   (streakBurst, showStreakTrianglesFixed) - preserved
+   ========================= */
+
+function streakBurst() {
+    const streakEl = document.getElementById("streakDisplay");
+    if (!streakEl) return;
+    streakEl.classList.add("streak-burst");
+    setTimeout(() => streakEl.classList.remove("streak-burst"), 600);
+}
+
+function showStreakTrianglesFixed(streakEl, count = 10) {
+    if (!streakEl) return;
+    const panel = document.getElementById("historyPanel");
+    const rect = streakEl.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+
+    const startX = rect.left + rect.width / 2 - panelRect.left - 6;
+    const startY = rect.top - panelRect.top - 10;
+
+    const offsets = [];
+    for (let i = 0; i < count; i++) {
+        const spread = (i - (count - 1) / 2) * 10;
+        offsets.push(spread);
     }
-});
-document.getElementById("clearHistoryBtn").addEventListener("click", () => {
-    if (confirm("Clear all saved history?")) {
-        localStorage.removeItem("newslesleHistory");
-        localStorage.removeItem("completedHeadlines");
-        const now = new Date();
-        renderCalendar(new Date().getFullYear(), new Date().getMonth());
-    }
-});
+
+    offsets.forEach((dx) => {
+        const t = document.createElement("div");
+        t.className = "streak-triangle";
+
+        t.style.left = `${startX}px`;
+        t.style.top = `${startY}px`;
+
+        t.style.setProperty('--dx', `${dx}px`);
+        t.style.setProperty('--dy', `-40px`);
+        t.style.setProperty('--deg', `0deg`);
+
+        t.style.animationDuration = `1s`;
+        t.style.animationTimingFunction = `ease-out`;
+
+        panel.appendChild(t);
+
+        setTimeout(() => t.remove(), 1200);
+    });
+}
