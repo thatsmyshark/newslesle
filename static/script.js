@@ -16,6 +16,7 @@ let wordCompleted = [];
 let articleImage = null;
 let articleDescription = "";
 let articlePublicationDate = "";
+let lastKnownStreak = 0;
 let score = 0;
 let completedHeadlines = new Set(); // session-only cache (optional)
 let guessedCorrectLetters = new Set();
@@ -55,17 +56,20 @@ async function postJSON(path, payload) {
 (async function init() {
     try {
         const { json } = await getJSON("/status");
+        if (json) {
+            lastKnownStreak = json.streak || 0;   // remember starting streak
+        }
         if (json && json.canPlay) {
-            await getValidHeadline(); // fetch headline (server ensures not already played)
+            await getValidHeadline();
         } else {
             showLimitPopup();
         }
     } catch (err) {
-        // if status fails, fall back to attempting to fetch a headline
         console.error("Failed to get status:", err);
         await getValidHeadline();
     }
 })();
+
 
 /* =========================
    Keyboard handling (unchanged)
@@ -836,7 +840,11 @@ async function endGame(message) {
             completedHeadlines.add(currentDateString);
 
             // celebration
-            showStreakCelebration(newStreak);
+            if (newStreak > lastKnownStreak) {
+                showStreakCelebration(newStreak);
+            }
+
+            lastKnownStreak = newStreak; // update for next round
         }
     }
 
@@ -919,8 +927,8 @@ if (clearHistoryBtn) {
 }
 
 /* =========================
-   Extra little helpers/visuals you had
-   (streakBurst, showStreakTrianglesFixed) - preserved
+   Extra little helpers/visuals
+   (streakBurst, showStreakTrianglesFixed)
    ========================= */
 
 function streakBurst() {
