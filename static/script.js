@@ -211,12 +211,7 @@ function setupGame(data) {
    Utilities (unchanged)
    ========================= */
 function formatDateSimple(isoString) {
-    if (!isoString) return "";
-    const date = new Date(isoString);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+    const currentDateString = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
 }
 
 function titleCase(str) {
@@ -401,15 +396,8 @@ function updateScoreDisplay() {
      [{headline, score, timeTaken, date, url, sourceName, publishedAt}, ...]
    ========================= */
 
-function getLocalDateString() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const day = String(now.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`; // "YYYY-MM-DD"
-}
-
-   async function renderCalendar(year, month) {
+   
+async function renderCalendar(year, month) {
     const panel = document.getElementById("historyPanel");
     const container = document.getElementById("calendarContainer");
     const results = document.getElementById("historyResults");
@@ -591,6 +579,7 @@ async function renderDayEntries(dateString, year = null, month = null) {
     });
 }
 
+
 async function renderSearchResults(filter) {
     const container = document.getElementById("calendarContainer");
     const results = document.getElementById("historyResults");
@@ -652,12 +641,12 @@ async function renderSearchResults(filter) {
    - saveToHistory returns the server response for use
    ========================= */
 async function saveToHistory(headlineArg, scoreArg, timeTakenArg) {
-    const currentDateString = getLocalDateString(); // "YYYY-MM-DD"
+    const currentDateString = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
     const payload = {
         headline: headlineArg,
         score: scoreArg,
         timeTaken: timeTakenArg,
-        date: currentDateString,
+        datePlayed: currentDateString,
         url: articleURL,
         sourceName: (window.__lastSourceName || ""),
         publishedAt: articlePublicationDate
@@ -900,7 +889,7 @@ async function endGame(message) {
 }
 
 /* =========================
-   History panel toggles & wiring (unchanged UX)
+   History panel toggles & wiring
    - Use server endpoints for data
    ========================= */
 
