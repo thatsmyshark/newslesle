@@ -36,6 +36,7 @@
 body {
     margin: 0;
     padding-top: 5em; /* to make room for fixed navbar */
+    padding-bottom: 5em; /* to make room for alphabet container */
     padding-left: 0;
     padding-right: 0;
     font-family: 'Segoe UI', sans-serif;
@@ -53,6 +54,7 @@ body {
     max-width: 1000px;
     max-height: 300px;
     justify-content: center;
+    margin-top: -0.5rem;
     align-items: center;
 }
 .word {
@@ -254,7 +256,7 @@ body {
     align-items: center;
     gap: 1.5rem; /* spacing between the items */
     flex-wrap: wrap; /* Optional: allows wrapping on smaller screens */
-    margin-bottom: 1rem; /* spacing below */
+    margin-bottom: -0.6rem; /* spacing below */
     margin-top: 1rem;
     white-space: nowrap; /* prevent text wrapping */
     font-size: 1rem;

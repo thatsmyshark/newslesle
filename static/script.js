@@ -74,20 +74,54 @@ async function postJSON(path, payload) {
 
 
 /* =========================
-   Keyboard handling (unchanged)
+   Keyboard handling (for shortcuts and other crack)
    ========================= */
 function keyboardListener(e) {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    const key = e.key.toUpperCase();
-    if (/^[A-Z]$/.test(key)) {
-        handleLetterGuess(key);
+    // ignore when typing into inputs / textareas
+    const active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+
+    const key = (e.key || '').toUpperCase();
+
+    // If the game is active, use letters for guessing as before
+    if (gameActive) {
+        if (/^[A-Z]$/.test(key)) {
+            e.preventDefault();
+            handleLetterGuess(key);
+        }
+        return;
     }
+
+    // Game is not active — treat N and R as shortcuts
+    if (key === 'N') {
+        e.preventDefault();
+        const nextBtn = document.getElementById('nextArticleBtn');
+        if (nextBtn) {
+            nextBtn.click();
+        } else {
+            // fallback: reload to fetch a new headline
+            location.reload();
+        }
+        return;
+    }
+
+    if (key === 'R') {
+        e.preventDefault();
+        const readLink = document.getElementById('readArticleLink') || document.querySelector('.endgame-links a.aesthetic-button');
+        if (readLink && readLink.href) {
+            window.open(readLink.href, '_blank');
+        }
+        return;
+    }
+
+    // allow other keys to be ignored when game inactive
 }
 
 /* =========================
    HEADLINE fetching
    - uses /headline endpoint (server filters played headlines)
-   - handles 429 (limit), 204 (no new headlines), and success
+   - handles 429 (limit or sometimes errors for sm reason), 204 (no new headlines), and success
    ========================= */
 async function getValidHeadline(attempts = 0) {
     if (attempts >= 5) {
@@ -813,7 +847,7 @@ async function endGame(message) {
     score = playerLost ? 0 : parseFloat((1000 / timeTaken).toFixed(1));
 
     gameActive = false;
-    document.removeEventListener("keydown", keyboardListener);
+    //document.removeEventListener("keydown", keyboardListener);
     const wordDisplay = document.getElementById("wordDisplay");
     if (wordDisplay) wordDisplay.style.display = "none";
 
@@ -839,9 +873,10 @@ async function endGame(message) {
     const actionLinks = document.createElement("div");
     actionLinks.classList.add("endgame-links");
     actionLinks.innerHTML = `
-        <a href="${articleURL}" target="_blank" class="aesthetic-button">Read Full Article</a>
-        <button class="aesthetic-button" id="nextArticleBtn">Next Article</button>
+    <a id="readArticleLink" href="${articleURL}" target="_blank" class="aesthetic-button">Read Full Article (R)</a>
+    <button class="aesthetic-button" id="nextArticleBtn">Next Article (N)</button>
     `;
+
 
     const existingLinks = aestheticBox ? aestheticBox.querySelector(".endgame-links") : null;
     if (existingLinks) existingLinks.remove();
