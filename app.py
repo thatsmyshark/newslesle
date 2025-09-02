@@ -54,16 +54,19 @@ with app.app_context():
 # ---- Helpers ----
 def get_or_create_user_id():
     uid = request.cookies.get("uid")
+    is_new = False
     if not uid:
         uid = str(uuid.uuid4())
         user = User(id=uid)
         db.session.add(user)
         db.session.commit()
+        is_new = True
     else:
         if not User.query.get(uid):
             db.session.add(User(id=uid))
             db.session.commit()
-    return uid
+            is_new = True
+    return uid, is_new
 
 def plays_today(uid: str) -> int:
     return db.session.query(func.count(Play.id)).filter(
@@ -100,15 +103,16 @@ def title_cleanup(headline: str) -> str:
 @app.route("/")
 def index():
     # Ensure the user has a uid cookie
-    uid = get_or_create_user_id()
+    uid, is_new = get_or_create_user_id()
     resp = make_response(render_template("index.html"))
     # Secure cookie flags are good practice; set Secure only when HTTPS
-    resp.set_cookie("uid", uid, httponly=True, samesite="Lax", secure=False)
+    if is_new:
+        resp.set_cookie("uid", uid, httponly=True, samesite="Lax", secure=False, max_age=60*60*24*365)  # 1 year
     return resp
 
 @app.route("/status")
 def status():
-    uid = get_or_create_user_id()
+    uid, is_new = get_or_create_user_id()
     count = plays_today(uid)
     return jsonify({
         "canPlay": count < MAX_DAILY,
@@ -124,7 +128,7 @@ def get_headline():
     Returns a headline the user hasn't completed yet.
     If the user hit the daily cap, return 429 unless ?preview=1 is set.
     """
-    uid = get_or_create_user_id()
+    uid, is_new = get_or_create_user_id()
     count = plays_today(uid)
     preview = request.args.get("preview") == "1"
 
@@ -191,7 +195,7 @@ def save_play():
     Save a completed play (history item). Also used to derive streak and completed headlines.
     Body: {headline, score, timeTaken, url, sourceName, publishedAt}
     """
-    uid = get_or_create_user_id()
+    uid, is_new = get_or_create_user_id()
     data = request.get_json(force=True) or {}
     headline = title_cleanup((data.get("headline") or "").upper())
     score = float(data.get("score") or 0)
@@ -229,7 +233,7 @@ def save_play():
 
 @app.route("/history", methods=["GET", "DELETE"])
 def history():
-    uid = get_or_create_user_id()
+    uid, is_new = get_or_create_user_id()
 
     if request.method == "DELETE":
         Play.query.filter_by(user_id=uid).delete()
