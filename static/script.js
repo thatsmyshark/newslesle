@@ -59,6 +59,7 @@ async function postJSON(path, payload) {
         const { json } = await getJSON("/status");
         if (json) {
             lastKnownStreak = json.streak || 0;   // remember starting streak
+            await renderStreakDisplay();          // <-- ADD THIS
         }
         if (json && json.canPlay) {
             await getValidHeadline();
@@ -71,6 +72,7 @@ async function postJSON(path, payload) {
         await getValidHeadline();
     }
 })();
+
 
 
 /* =========================
