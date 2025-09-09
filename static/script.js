@@ -1,5 +1,4 @@
 /* main.js — server-backed version (fully replaces localStorage) */
-
 /* =========================
    Game state (unchanged)
    ========================= */
