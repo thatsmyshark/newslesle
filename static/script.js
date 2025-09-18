@@ -328,26 +328,43 @@ function updateDisplay() {
    Alphabet rendering & guesses (unchanged)
    ========================= */
 function renderAlphabet() {
-    const container = document.getElementById("alphabetDisplay");
-    if (!container) return;
-    container.innerHTML = "";
+  const container = document.getElementById("alphabetDisplay");
+  if (!container) return;
+  container.innerHTML = "";
 
-    for (let i = 65; i <= 90; i++) {
-        const letter = String.fromCharCode(i);
-        const span = document.createElement("span");
-        span.classList.add("alphabet-letter");
-        span.textContent = letter;
+  const topRow = document.createElement("div");
+  const bottomRow = document.createElement("div");
+  topRow.className = "alphabet-row";
+  bottomRow.className = "alphabet-row";
 
-        if (guessedCorrectLetters.has(letter)) {
-            span.classList.add("correct");
-        } else if (guessedIncorrectLetters.has(letter)) {
-            span.classList.add("incorrect");
-        }
+  for (let i = 0; i < 26; i++) {
+    const letter = String.fromCharCode(65 + i);
+    const span = document.createElement("span");
+    span.classList.add("alphabet-letter");
+    span.textContent = letter;
 
-        span.addEventListener("click", () => handleLetterGuess(letter));
-        container.appendChild(span);
+    if (guessedCorrectLetters.has(letter)) {
+      span.classList.add("correct");
+    } else if (guessedIncorrectLetters.has(letter)) {
+      span.classList.add("incorrect");
     }
+
+    span.addEventListener("click", () => {
+        if (!gameActive) return;
+        handleLetterGuess(letter);
+    });
+
+    if (i < 13) {
+      topRow.appendChild(span);
+    } else {
+      bottomRow.appendChild(span);
+    }
+  }
+
+  container.appendChild(topRow);
+  container.appendChild(bottomRow);
 }
+
 
 function updateIncorrectGuessesDisplay() {
     const el = document.getElementById("incorrectGuessesDisplay");

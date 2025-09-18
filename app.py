@@ -150,7 +150,8 @@ def get_headline():
             'publishedAt': ""
         })
 
-    # exclude already played headlines for this user
+    # exclude already played + too long headlines
+    MAX_HEADLINE_LENGTH = 75
     played_titles = {p.headline for p in Play.query.with_entities(Play.headline).filter(Play.user_id == uid)}
     candidates = []
     for a in data["articles"]:
@@ -159,22 +160,27 @@ def get_headline():
         if not title or not url_a:
             continue
         cleaned = title_cleanup(title.upper())
-        if cleaned not in played_titles:
+        if cleaned not in played_titles and len(cleaned) <= MAX_HEADLINE_LENGTH:
             candidates.append((cleaned, a))
 
     if not candidates:
-        # fallback: user has seen them all; return any one (or 204)
         if preview:
-            a = random.choice([x for x in data["articles"] if x.get("title") and x.get("url")])
-            cleaned = title_cleanup(a["title"].upper())
-            return jsonify({
-                'headline': cleaned,
-                'description': (a.get("description") or "").strip() or "No summary available.",
-                'url': a["url"],
-                'urlToImage': a.get("urlToImage", ""),
-                'sourceName': a.get("source", {}).get("name", "Unknown Source"),
-                'publishedAt': a.get("publishedAt", "")
-            })
+            # fallback: pick a random short headline for preview
+            fallback_articles = [
+                a for a in data["articles"]
+                if a.get("title") and a.get("url") and len(title_cleanup(a["title"].upper())) <= MAX_HEADLINE_LENGTH
+            ]
+            if fallback_articles:
+                a = random.choice(fallback_articles)
+                cleaned = title_cleanup(a["title"].upper())
+                return jsonify({
+                    'headline': cleaned,
+                    'description': (a.get("description") or "").strip() or "No summary available.",
+                    'url': a["url"],
+                    'urlToImage': a.get("urlToImage", ""),
+                    'sourceName': a.get("source", {}).get("name", "Unknown Source"),
+                    'publishedAt': a.get("publishedAt", "")
+                })
         return jsonify({"error": "No new headlines available"}), 204
 
     cleaned, a = random.choice(candidates)

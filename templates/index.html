@@ -13,15 +13,10 @@
     </div>
 </div>
 
-<!-- Game Stats -->
-<div class="game-stats">
-    <span>Time: <strong id="StopwatchDisplay">0.0s</strong></span>
-    <span>Incorrect Guesses Left: <strong id="incorrectGuessesDisplay">2</strong></span>
-    <span>Score: <strong id="ScoreDisplay">0</strong></span>
-</div>  
+
 
 <!-- History Tab Toggle Button -->
-<div id="historyToggle" class="history-tab-toggle">⟨ History</div>
+<div id="historyToggle" class="history-tab-toggle">↺</div>
 
 <!-- History Panel -->
 <div id="historyPanel" class="history-panel">
@@ -71,16 +66,24 @@
 <!-- Input for letters (not visible, just used for keyboard input) -->
 <input type="text" id="letterInput" maxlength="1" style="opacity: 0; position: absolute; pointer-events: none;">
 
+
+<!-- Alphabet and Input aka footer -->
+<div id="alphabetDisplay" class="alphabet-container" style="user-select: none;">
+</div>
+
 <!-- disclaimer -->
 <p style="user-select: none; font-size: 10px; color:rgb(143, 143, 143); font-style: italic;">
     Headlines featured may not always reflect accurate or complete information.
-    The responsibility to fact-check and verify information falls on the user.<br>
-    Created by github.com/thatsmyshark. Powered by Railway.</p>
+    The responsibility to fact-check and 
+    <br>
+    verify information falls on the user. Created by github.com/thatsmyshark. Powered by Railway.</p>
 
-<!-- Alphabet and Input aka footer -->
-<div id="alphabetDisplay" class="alphabet-container" style="user-select: none;"></div>
-
-
+    <!-- Game Stats -->
+<!-- <div class="game-stats">
+    <span>Time: <strong id="StopwatchDisplay">0.0s</strong></span>
+    <span>Incorrect Guesses Left: <strong id="incorrectGuessesDisplay">2</strong></span>
+    <span>Score: <strong id="ScoreDisplay">0</strong></span>
+</div>  -->
 
 <script src="/static/script.js"></script>
 </body>
